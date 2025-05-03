@@ -190,11 +190,47 @@ def example_workflow():
         return False
         
     # Step 3: Create a new project
-    project_path = "C:/Temp/ExampleProject.project"
+    # Use a path in a location with guaranteed write permissions for testing
+    project_path = "C:/Users/Public/Documents/CODESYS_Test_Project.project"
     logger.info("Creating new project at %s...", project_path)
-    result = create_project(project_path)
-    if not result.get('success', False):
-        logger.error("Failed to create project: %s", result.get('error', 'Unknown error'))
+    
+    # Try to create project with retries in case of temporary issues
+    max_project_attempts = 3
+    for attempt in range(1, max_project_attempts + 1):
+        logger.info(f"Project creation attempt {attempt} of {max_project_attempts}")
+        result = create_project(project_path)
+        
+        # Log detailed result information
+        logger.info(f"Project creation result: {json.dumps(result, indent=2)}")
+        
+        if result.get('success', False):
+            logger.info("Project created successfully")
+            
+            # Log the actual project path from result if available
+            if 'project' in result and 'path' in result['project']:
+                actual_path = result['project']['path']
+                logger.info(f"Actual project path: {actual_path}")
+                
+                # Check if file exists locally (if possible)
+                try:
+                    if os.path.exists(actual_path):
+                        logger.info(f"Project file verified to exist on disk")
+                    else:
+                        logger.warning(f"Project file does not exist locally at: {actual_path}")
+                except Exception as e:
+                    logger.warning(f"Could not verify project file: {str(e)}")
+            
+            break
+        else:
+            error = result.get('error', 'Unknown error')
+            logger.warning(f"Project creation attempt {attempt} failed: {error}")
+            
+            if attempt < max_project_attempts:
+                logger.info(f"Waiting before retry...")
+                time.sleep(5)  # Wait 5 seconds before retry
+    else:
+        # This runs if the for loop completes without breaking
+        logger.error("Failed to create project after multiple attempts")
         return False
         
     # Step 4: Create a POU

@@ -300,12 +300,12 @@ class ScriptExecutor:
         self.request_dir = request_dir
         self.result_dir = result_dir
         
-    def execute_script(self, script_content, timeout=300):
+    def execute_script(self, script_content, timeout=600):
         """Execute a script and return the result.
         
         Args:
             script_content (str): The script content to execute
-            timeout (int): Timeout in seconds (default: 300)
+            timeout (int): Timeout in seconds (default: 600 - increased for complex operations)
             
         Returns:
             dict: The result of the script execution
@@ -316,42 +316,57 @@ class ScriptExecutor:
         request_path = None
         
         try:
-            # Log script execution start
+            # Log script execution start with more info
             logger.info("Executing script (request ID: %s, timeout: %s seconds)", request_id, timeout)
-            logger.debug("Script content: %s", script_content[:200] + ('...' if len(script_content) > 200 else ''))
+            script_preview = script_content[:500].replace('\n', ' ')
+            logger.info("Script preview: %s...", script_preview)
             
-            # Create temporary script file
-            script_path = os.path.join(tempfile.gettempdir(), "codesys_script_{0}.py".format(request_id))
+            # Create dedicated directory for this request to avoid path issues
+            request_dir = os.path.join(tempfile.gettempdir(), f"codesys_req_{request_id}")
+            if not os.path.exists(request_dir):
+                os.makedirs(request_dir)
+                logger.debug("Created request directory: %s", request_dir)
+            
+            # Create temporary script file with UTF-8 encoding explicitly
+            script_path = os.path.join(request_dir, "script.py")
             try:
-                with open(script_path, 'w') as f:
+                with open(script_path, 'w', encoding='utf-8') as f:
                     f.write(script_content)
-                logger.debug("Created script file: %s", script_path)
+                logger.info("Created script file: %s", script_path)
+                logger.debug("Script file size: %d bytes", os.path.getsize(script_path))
             except Exception as e:
                 logger.error("Failed to write script file: %s", str(e))
                 return {"success": False, "error": "Failed to write script file: " + str(e)}
                 
-            # Create result file path
-            result_path = os.path.join(tempfile.gettempdir(), "codesys_result_{0}.json".format(request_id))
+            # Create result file path in same dedicated directory
+            result_path = os.path.join(request_dir, "result.json")
             
-            # Create request file
+            # Create request file with backslash-escaped paths for Windows
             request_path = os.path.join(self.request_dir, "{0}.request".format(request_id))
             try:
-                with open(request_path, 'w') as f:
-                    f.write(json.dumps({
-                        "script_path": script_path,
-                        "result_path": result_path,
-                        "timestamp": time.time()
-                    }))
-                logger.debug("Created request file: %s", request_path)
+                with open(request_path, 'w', encoding='utf-8') as f:
+                    # Use double backslashes for Windows path escaping
+                    request_data = {
+                        "script_path": script_path.replace("\\", "\\\\"),
+                        "result_path": result_path.replace("\\", "\\\\"),
+                        "timestamp": time.time(),
+                        "request_id": request_id
+                    }
+                    f.write(json.dumps(request_data))
+                logger.info("Created request file: %s", request_path)
+                logger.debug("Request data: %s", json.dumps(request_data))
             except Exception as e:
                 logger.error("Failed to write request file: %s", str(e))
                 return {"success": False, "error": "Failed to write request file: " + str(e)}
                 
-            # Wait for result
+            # Wait for result with progressive polling
             logger.info("Waiting for script execution to complete (max: %s seconds)...", timeout)
             start_time = time.time()
             check_count = 0
             last_log_time = start_time
+            
+            # Use progressive polling intervals - start fast, then get slower
+            poll_interval = 0.1  # Start with checking every 100ms
             
             while time.time() - start_time < timeout:
                 check_count += 1
@@ -362,44 +377,89 @@ class ScriptExecutor:
                     elapsed = time.time() - start_time
                     logger.info("Result file found after %.2f seconds (%d checks)", elapsed, check_count)
                     
-                    # Read result
-                    try:
-                        with open(result_path, 'r') as f:
-                            content = f.read()
-                            try:
-                                result = json.loads(content)
-                                
-                                # Log result summary
-                                if result.get('success', False):
-                                    logger.info("Script execution successful")
-                                else:
-                                    error = result.get('error', 'Unknown error')
-                                    logger.warning("Script execution failed: %s", error)
-                                
-                                # Cleanup files
-                                self._cleanup_files(script_path, result_path, request_path)
-                                
-                                return result
-                            except json.JSONDecodeError as je:
-                                logger.error("Invalid JSON in result file: %s", str(je))
-                                logger.debug("Result file content: %s", content)
-                                
-                                # Try again next iteration, it might be partially written
-                                pass
-                    except Exception as e:
-                        logger.error("Error reading result file: %s", str(e))
-                        # Try again next iteration
-                
-                # This code should not reference process_manager since it doesn't exist in ScriptExecutor
+                    # Read result with retry for potentially incomplete files
+                    retry_count = 0
+                    max_retries = 5
+                    file_size = os.path.getsize(result_path)
+                    
+                    while retry_count < max_retries:
+                        try:
+                            # Wait a moment for the file to be fully written
+                            time.sleep(0.2)
+                            
+                            # Check if file size changed
+                            new_size = os.path.getsize(result_path)
+                            if new_size != file_size:
+                                logger.debug("Result file size changed from %d to %d bytes, waiting...", 
+                                            file_size, new_size)
+                                file_size = new_size
+                                retry_count += 1
+                                continue
+                            
+                            with open(result_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                                try:
+                                    result = json.loads(content)
+                                    
+                                    # Log result summary
+                                    if result.get('success', False):
+                                        logger.info("Script execution successful")
+                                    else:
+                                        error = result.get('error', 'Unknown error')
+                                        logger.warning("Script execution failed: %s", error)
+                                    
+                                    # Cleanup files
+                                    self._cleanup_files(script_path, result_path, request_path, request_dir)
+                                    
+                                    return result
+                                except json.JSONDecodeError as je:
+                                    logger.warning("Invalid JSON in result file (attempt %d/%d): %s", 
+                                                 retry_count+1, max_retries, str(je))
+                                    logger.debug("Result file content: %s", content)
+                                    
+                                    # Try again after a short delay
+                                    retry_count += 1
+                                    time.sleep(0.5)
+                        except Exception as e:
+                            logger.warning("Error reading result file (attempt %d/%d): %s", 
+                                         retry_count+1, max_retries, str(e))
+                            retry_count += 1
+                            time.sleep(0.5)
+                    
+                    # If we get here, we've exhausted retries
+                    logger.error("Failed to read valid result after %d retries", max_retries)
+                    return {"success": False, "error": f"Failed to read valid result after {max_retries} retries"}
                 
                 # Periodic status logging
                 current_time = time.time()
                 if current_time - last_log_time > 10:  # Log every 10 seconds
-                    logger.info("Still waiting for script execution (elapsed: %.2f seconds)", current_time - start_time)
+                    elapsed = current_time - start_time
+                    logger.info("Still waiting for script execution (elapsed: %.2f seconds, checks: %d)", 
+                               elapsed, check_count)
+                    
+                    # Log if script and request files still exist
+                    if os.path.exists(script_path):
+                        logger.debug("Script file still exists (%d bytes)", os.path.getsize(script_path))
+                    else:
+                        logger.warning("Script file no longer exists!")
+                        
+                    if os.path.exists(request_path):
+                        logger.debug("Request file still exists (%d bytes)", os.path.getsize(request_path))
+                    else:
+                        logger.warning("Request file no longer exists!")
+                    
                     last_log_time = current_time
                             
-                time.sleep(0.1)
+                # Progressive polling - start fast, then slow down
+                if elapsed < 5:
+                    poll_interval = 0.1  # First 5 seconds: check every 100ms
+                elif elapsed < 30:
+                    poll_interval = 0.5  # 5-30 seconds: check every 500ms
+                else:
+                    poll_interval = 1.0  # After 30 seconds: check every second
                 
+                time.sleep(poll_interval)
+            
             # If we've timed out, but CODESYS appears to be running,
             # return a mock success result to allow the client to continue
             if script_content.strip().startswith("import scriptengine") and "system = scriptengine.ScriptSystem()" in script_content:
@@ -408,7 +468,7 @@ class ScriptExecutor:
                 
                 # Create a mock result file for future reference
                 try:
-                    with open(result_path, 'w') as f:
+                    with open(result_path, 'w', encoding='utf-8') as f:
                         mock_result = {
                             "success": True, 
                             "message": "Session initialized (timeout workaround)",
@@ -419,7 +479,7 @@ class ScriptExecutor:
                     logger.error("Error creating mock result file: %s", str(e))
                 
                 # Clean up files
-                self._cleanup_files(script_path, None, request_path)
+                self._cleanup_files(script_path, None, request_path, request_dir)
                 
                 # Return mock success response
                 return {
@@ -431,23 +491,50 @@ class ScriptExecutor:
             # Timeout
             elapsed = time.time() - start_time
             logger.error("Script execution timed out after %.2f seconds (%d checks)", elapsed, check_count)
-            self._cleanup_files(script_path, result_path, request_path)
-            return {"success": False, "error": "Script execution timed out after {} seconds".format(timeout)}
+            
+            # Create error result file for reference
+            try:
+                with open(result_path, 'w', encoding='utf-8') as f:
+                    error_result = {
+                        "success": False,
+                        "error": f"Script execution timed out after {timeout} seconds",
+                        "checks": check_count,
+                        "request_id": request_id
+                    }
+                    json.dump(error_result, f)
+                logger.debug("Created timeout error result file")
+            except Exception as e:
+                logger.error("Error creating timeout error result file: %s", str(e))
+            
+            # Clean up files but keep script for debugging
+            self._cleanup_files(None, None, request_path, None)
+            logger.info("Kept script file for debugging: %s", script_path)
+            
+            return {
+                "success": False, 
+                "error": f"Script execution timed out after {timeout} seconds",
+                "script_path": script_path,
+                "result_path": result_path,
+                "request_id": request_id
+            }
         except Exception as e:
             logger.error("Error executing script (request ID: %s): %s", request_id, str(e))
+            logger.error(traceback.format_exc())
             # Attempt to clean up files
             if script_path or result_path or request_path:
-                self._cleanup_files(script_path, result_path, request_path)
+                self._cleanup_files(script_path, result_path, request_path, request_dir)
             return {"success": False, "error": str(e)}
             
-    def _cleanup_files(self, script_path, result_path, request_path):
+    def _cleanup_files(self, script_path, result_path, request_path, request_dir=None):
         """Clean up temporary files.
         
         Args:
             script_path (str): Path to the script file
             result_path (str): Path to the result file
             request_path (str): Path to the request file
+            request_dir (str): Path to the request directory (optional)
         """
+        # First clean up individual files
         for path in [script_path, result_path, request_path]:
             if not path:
                 continue
@@ -458,6 +545,20 @@ class ScriptExecutor:
                     logger.debug("Removed temporary file: %s", path)
             except Exception as e:
                 logger.warning("Failed to remove temporary file %s: %s", path, str(e))
+        
+        # Then clean up the request directory if specified
+        if request_dir and os.path.exists(request_dir):
+            try:
+                # Check if directory is empty
+                if not os.listdir(request_dir):
+                    os.rmdir(request_dir)
+                    logger.debug("Removed empty request directory: %s", request_dir)
+                else:
+                    logger.warning("Request directory not empty, not removing: %s", request_dir)
+                    # List files left in directory
+                    logger.debug("Files remaining in request directory: %s", os.listdir(request_dir))
+            except Exception as e:
+                logger.warning("Failed to remove request directory %s: %s", request_dir, str(e))
 
 
 class ScriptGenerator:
@@ -512,35 +613,94 @@ except Exception as e:
     def generate_project_create_script(self, params):
         """Generate script to create a project."""
         path = params.get("path", "")
+        # Normalize path to use backslashes for Windows
+        path = path.replace("/", "\\")
         
         return """
 import scriptengine
 import json
+import os
+import traceback
 
 try:
+    # Log each step for easier debugging
+    print("Starting project creation script")
+    print("Target project path: {0}")
+    
+    # Ensure the target directory exists
+    target_dir = os.path.dirname("{0}")
+    print("Target directory: " + target_dir)
+    
+    if not os.path.exists(target_dir):
+        try:
+            print("Creating target directory...")
+            os.makedirs(target_dir)
+            print("Target directory created: " + target_dir)
+        except Exception as dir_error:
+            print("Error creating directory: " + str(dir_error))
+            raise
+    else:
+        print("Target directory already exists")
+    
     # Get system instance
+    print("Getting system instance...")
     system = session.system
+    print("System instance obtained")
     
     # Create new project
+    print("Creating new project...")
     project = system.projects.create()
+    print("New project created")
+    
+    # Log project properties
+    print("Initial project properties:")
+    print("Project path: " + (project.path if hasattr(project, 'path') else "N/A"))
+    print("Project name: " + (project.name if hasattr(project, 'name') else "N/A"))
+    print("Project dirty: " + str(project.dirty if hasattr(project, 'dirty') else "N/A"))
     
     # Save to specified path
+    print("Saving project to: {0}")
     project.save_as("{0}")
+    print("Project saved successfully")
+    
+    # Verify the project was saved
+    print("Verifying project save...")
+    if hasattr(project, 'path'):
+        saved_path = project.path
+        print("Project path after save: " + saved_path)
+        if not os.path.exists(saved_path):
+            print("WARNING: Project file does not exist at: " + saved_path)
+    else:
+        print("WARNING: Project has no path attribute after save")
     
     # Store as active project
+    print("Setting as active project...")
     session.active_project = project
+    print("Project set as active")
     
-    # Return project info
+    # Return project info with detailed information
     result = {{
         "success": True,
         "project": {{
-            "path": project.path,
-            "name": project.name,
-            "dirty": project.dirty
-        }}
+            "path": project.path if hasattr(project, 'path') else "Unknown",
+            "name": project.name if hasattr(project, 'name') else "Unknown",
+            "dirty": project.dirty if hasattr(project, 'dirty') else False,
+            "file_exists": os.path.exists(project.path) if hasattr(project, 'path') else False,
+            "requested_path": "{0}"
+        }},
+        "message": "Project created successfully"
     }}
 except Exception as e:
-    result = {{"success": False, "error": str(e)}}
+    error_str = str(e)
+    tb_str = traceback.format_exc()
+    print("Error creating project: " + error_str)
+    print("Traceback: " + tb_str)
+    
+    result = {{
+        "success": False,
+        "error": error_str,
+        "traceback": tb_str
+    }}
 """.format(path.replace("\\", "\\\\"))
         
     def generate_project_open_script(self, params):
@@ -1274,37 +1434,83 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
             return
         
         path = params.get("path", "")
+        # Normalize path to use backslashes for Windows
+        path = path.replace("/", "\\")
         logger.info("Project creation request for path: %s (executing script in CODESYS)", path)
+        
+        # Make sure CODESYS is running
+        if not self.process_manager.is_running():
+            logger.warning("CODESYS not running, attempting to start it")
+            if not self.process_manager.start():
+                error_msg = "Failed to start CODESYS process"
+                logger.error(error_msg)
+                self.send_json_response({
+                    "success": False,
+                    "error": error_msg
+                }, 500)
+                return
+            # Wait a moment for CODESYS to initialize
+            time.sleep(5)
         
         # Actually execute the script in CODESYS
         try:
+            # Generate the script with extensive error handling and debugging
             script = self.script_generator.generate_project_create_script(params)
             
-            # Add debug logging to the script
+            # Add debug logging to the script - even more comprehensive
             debug_script = f"""
 # Debug logging
 import sys
 import os
 import time
+import traceback
 
 print("DEBUG: Project creation script starting")
+print("DEBUG: Script execution timestamp:", time.strftime("%Y-%m-%d %H:%M:%S"))
 print("DEBUG: Python version:", sys.version)
 print("DEBUG: Working directory:", os.getcwd())
 print("DEBUG: Creating project at:", "{path}")
+print("DEBUG: Path type:", type("{path}").__name__)
 
-# Original script follows
+# Wrap the entire script in a try-except for better error reporting
+try:
+    # Original script follows
 {script}
+
+    # Verify that result variable exists
+    if 'result' not in locals():
+        result = {{"success": False, "error": "Script did not set result variable"}}
+        print("DEBUG: Script did not set result variable, creating default failure result")
+    else:
+        print("DEBUG: Result variable exists:", result)
+        
+    # Add path info to result for verification
+    if result.get('success', False) and 'project' in result:
+        result['project']['requested_path'] = "{path}"
+        print("DEBUG: Added requested_path to result for verification")
+        
+except Exception as e:
+    error_str = str(e)
+    tb_str = traceback.format_exc()
+    print("DEBUG: Exception during script execution:", error_str)
+    print("DEBUG: Traceback:", tb_str)
+    
+    # Create error result
+    result = {{
+        "success": False,
+        "error": error_str,
+        "traceback": tb_str
+    }}
 
 # Additional logging
 print("DEBUG: Script execution completed")
-if 'result' in locals():
-    print("DEBUG: Result:", result)
-else:
-    print("DEBUG: No result variable set")
+print("DEBUG: Final result type:", type(result).__name__)
+print("DEBUG: Final result:", result)
 """
             
             logger.info("Executing project creation script in CODESYS")
-            result = self.script_executor.execute_script(debug_script, timeout=300)
+            # Execute with increased timeout
+            result = self.script_executor.execute_script(debug_script, timeout=600)
             
             logger.info("Script execution result: %s", result)
             
@@ -1314,11 +1520,14 @@ else:
             else:
                 error_msg = result.get("error", "Unknown error")
                 logger.error("Error creating project: %s", error_msg)
+                if "traceback" in result:
+                    logger.error("Traceback: %s", result["traceback"])
                 
                 # Send error response
                 self.send_json_response({
                     "success": False,
-                    "error": error_msg
+                    "error": error_msg,
+                    "traceback": result.get("traceback", "No traceback available")
                 }, 500)
                 
         except Exception as e:
@@ -1326,15 +1535,10 @@ else:
             
             # Send error response with fallback
             self.send_json_response({
-                "success": True,  # Fallback to success for client compatibility
-                "project": {
-                    "path": path,
-                    "name": os.path.basename(path),
-                    "dirty": False
-                },
-                "warning": f"Exception during execution, returning mock success: {str(e)}",
+                "success": False,  # Changed to false for more accurate error reporting
+                "error": f"Exception during project creation: {str(e)}",
                 "fallback": True
-            })
+            }, 500)
         
     def handle_project_open(self, params):
         """Handle project/open endpoint."""

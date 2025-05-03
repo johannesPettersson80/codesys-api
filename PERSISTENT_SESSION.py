@@ -188,53 +188,115 @@ class CodesysPersistentSession(object):
     def process_request(self, request_path):
         """Process a single request."""
         result_path = None
+        script_path = None
+        request_id = "unknown"
+        
         try:
             # Read request
             with open(request_path, 'r') as f:
-                request = json.loads(f.read())
+                request_content = f.read()
+                self.log("Request content: %s" % request_content[:200])
+                request = json.loads(request_content)
                 
             # Get script path and result path
             script_path = request.get("script_path")
             result_path = request.get("result_path")
+            request_id = request.get("request_id", "unknown")
             
             if not script_path or not result_path:
                 raise ValueError("Invalid request - missing script_path or result_path")
                 
-            # Log request
-            self.log("Processing request: %s" % os.path.basename(script_path))
+            # Log request with more details
+            self.log("Processing request ID: %s" % request_id)
+            self.log("Script path: %s" % script_path)
+            self.log("Result path: %s" % result_path)
             
             # Check if script file exists
             if not os.path.exists(script_path):
+                self.log("Script file not found at: %s" % script_path)
+                self.log("Current directory: %s" % os.getcwd())
+                
+                # Try to list parent directory
+                try:
+                    parent_dir = os.path.dirname(script_path)
+                    if os.path.exists(parent_dir):
+                        self.log("Parent directory exists, contents: %s" % str(os.listdir(parent_dir)))
+                    else:
+                        self.log("Parent directory does not exist: %s" % parent_dir)
+                except Exception, dir_e:
+                    self.log("Error listing parent directory: %s" % str(dir_e))
+                
                 raise IOError("Script file not found: %s" % script_path)
                 
+            # Log script size
+            try:
+                script_size = os.path.getsize(script_path)
+                self.log("Script file size: %d bytes" % script_size)
+            except Exception, size_e:
+                self.log("Could not get script file size: %s" % str(size_e))
+                
             # Execute script
+            self.log("Starting script execution...")
             result = self.execute_script(script_path)
+            self.log("Script execution completed")
             
-            # Write result
+            # Add request_id to result for tracing
+            if isinstance(result, dict):
+                result["request_id"] = request_id
+            
+            # Write result - create directory if needed
+            result_dir = os.path.dirname(result_path)
+            if not os.path.exists(result_dir):
+                self.log("Creating result directory: %s" % result_dir)
+                os.makedirs(result_dir)
+            
+            self.log("Writing result to: %s" % result_path)
             with open(result_path, 'w') as f:
-                f.write(json.dumps(result))
+                result_json = json.dumps(result)
+                f.write(result_json)
+                self.log("Result written successfully (%d bytes)" % len(result_json))
                 
             # Log completion
-            self.log("Request completed: %s" % os.path.basename(script_path))
+            self.log("Request completed: %s" % request_id)
         except Exception, e:
-            self.log("Error processing request: %s" % str(e))
+            self.log("Error processing request %s: %s" % (request_id, str(e)))
             self.log(traceback.format_exc())
             
             # Write error result if result_path is available
             if result_path:
                 try:
+                    # Ensure result directory exists
+                    result_dir = os.path.dirname(result_path)
+                    if not os.path.exists(result_dir):
+                        os.makedirs(result_dir)
+                        
+                    self.log("Writing error result to: %s" % result_path)
                     with open(result_path, 'w') as f:
-                        f.write(json.dumps({
+                        error_result = {
                             "success": False,
                             "error": str(e),
-                            "traceback": traceback.format_exc()
-                        }))
-                except:
-                    pass
+                            "traceback": traceback.format_exc(),
+                            "request_id": request_id,
+                            "environment": {
+                                "current_dir": os.getcwd(),
+                                "script_path": script_path,
+                                "script_exists": os.path.exists(script_path) if script_path else False,
+                                "python_version": sys.version
+                            }
+                        }
+                        result_json = json.dumps(error_result)
+                        f.write(result_json)
+                        self.log("Error result written successfully (%d bytes)" % len(result_json))
+                except Exception, write_e:
+                    self.log("Error writing result file: %s" % str(write_e))
+                    self.log(traceback.format_exc())
                     
     def execute_script(self, script_path):
         """Execute a Python script in the CODESYS environment."""
         try:
+            # Log execution start
+            self.log("Executing script: %s" % script_path)
+            
             # Create globals dict with access to the session
             globals_dict = {
                 "session": self,
@@ -243,27 +305,76 @@ class CodesysPersistentSession(object):
                 "json": json,
                 "os": os,
                 "time": time,
-                "scriptengine": scriptengine
+                "scriptengine": scriptengine,
+                "traceback": traceback,
+                "sys": sys
             }
             
             # Load script
-            with open(script_path, 'r') as f:
-                script_code = f.read()
+            self.log("Loading script content...")
+            try:
+                with open(script_path, 'r') as f:
+                    script_code = f.read()
+                self.log("Script loaded successfully (%d bytes)" % len(script_code))
+                
+                # Log first few lines of script for debugging
+                first_lines = script_code.split('\n')[:5]
+                self.log("Script preview: %s" % '\n'.join(first_lines))
+                
+            except Exception, load_e:
+                self.log("Error loading script: %s" % str(load_e))
+                self.log(traceback.format_exc())
+                return {
+                    "success": False,
+                    "error": "Error loading script: %s" % str(load_e),
+                    "traceback": traceback.format_exc()
+                }
                 
             # Execute script
+            self.log("Executing script code...")
             local_vars = {}
-            exec(script_code, globals_dict, local_vars)
+            try:
+                exec(script_code, globals_dict, local_vars)
+                self.log("Script execution completed successfully")
+            except Exception, exec_e:
+                self.log("Error executing script: %s" % str(exec_e))
+                self.log(traceback.format_exc())
+                return {
+                    "success": False,
+                    "error": str(exec_e),
+                    "traceback": traceback.format_exc(),
+                    "execution_failed": True
+                }
             
             # Check for result
+            self.log("Checking for result variable...")
             if "result" in local_vars:
-                return local_vars["result"]
+                self.log("Result variable found")
+                result = local_vars["result"]
+                
+                # Add execution metadata
+                if isinstance(result, dict):
+                    result["execution_time"] = time.time()
+                    result["executed_by"] = "CODESYS PersistentSession"
+                
+                return result
             else:
-                return {"success": True, "message": "Script executed successfully"}
+                self.log("No result variable found, returning default success")
+                return {
+                    "success": True, 
+                    "message": "Script executed successfully (no result variable)",
+                    "execution_time": time.time(),
+                    "executed_by": "CODESYS PersistentSession"
+                }
         except Exception, e:
+            self.log("Unhandled error in execute_script: %s" % str(e))
+            self.log(traceback.format_exc())
             return {
                 "success": False,
                 "error": str(e),
-                "traceback": traceback.format_exc()
+                "traceback": traceback.format_exc(),
+                "execution_time": time.time(),
+                "executed_by": "CODESYS PersistentSession"
             }
             
     def periodic_tasks(self):
