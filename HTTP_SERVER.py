@@ -452,9 +452,10 @@ class ScriptExecutor:
                     last_log_time = current_time
                             
                 # Progressive polling - start fast, then slow down
-                if elapsed < 5:
+                current_elapsed = time.time() - start_time
+                if current_elapsed < 5:
                     poll_interval = 0.1  # First 5 seconds: check every 100ms
-                elif elapsed < 30:
+                elif current_elapsed < 30:
                     poll_interval = 0.5  # 5-30 seconds: check every 500ms
                 else:
                     poll_interval = 1.0  # After 30 seconds: check every second
