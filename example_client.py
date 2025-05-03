@@ -145,11 +145,32 @@ def get_system_logs():
 
 def example_workflow():
     """Run an example workflow demonstrating key API capabilities."""
-    # Step 1: Start CODESYS session
+    # Step 1: Start CODESYS session (try multiple times)
     logger.info("Starting CODESYS session...")
-    result = start_session()
-    if not result.get('success', False):
-        logger.error("Failed to start session: %s", result.get('error', 'Unknown error'))
+    
+    # Try up to 3 times with increasing timeouts
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        logger.info(f"Attempt {attempt} of {max_attempts} to start session...")
+        try:
+            result = start_session()
+            if result.get('success', False):
+                logger.info("Session started successfully")
+                break
+            else:
+                error = result.get('error', 'Unknown error')
+                logger.warning(f"Attempt {attempt} failed: {error}")
+                if attempt < max_attempts:
+                    logger.info(f"Waiting before retry...")
+                    time.sleep(5)  # Wait 5 seconds before retry
+        except Exception as e:
+            logger.warning(f"Attempt {attempt} exception: {str(e)}")
+            if attempt < max_attempts:
+                logger.info(f"Waiting before retry...")
+                time.sleep(5)  # Wait 5 seconds before retry
+    else:
+        # This runs if the for loop completes without breaking
+        logger.error("Failed to start session after multiple attempts")
         return False
         
     # Step 2: Get session status

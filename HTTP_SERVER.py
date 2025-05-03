@@ -980,9 +980,22 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 self.handle_system_logs()
             else:
                 self.send_error(404, "Not Found")
+        except ConnectionAbortedError as e:
+            logger.warning("Connection aborted during GET request: %s", str(e))
+            # Don't try to send an error response as the connection is already broken
+        except BrokenPipeError as e:
+            logger.warning("Broken pipe during GET request: %s", str(e))
+            # Don't try to send an error response as the connection is already broken
+        except ConnectionResetError as e:
+            logger.warning("Connection reset during GET request: %s", str(e))
+            # Don't try to send an error response as the connection is already broken
         except Exception as e:
             logger.error("Error handling GET request: %s", str(e))
-            self.send_error(500, str(e))
+            try:
+                self.send_error(500, str(e))
+            except (ConnectionAbortedError, BrokenPipeError, ConnectionResetError):
+                # Connection already closed, can't send error
+                pass
             
     def do_POST(self):
         """Handle POST requests."""
@@ -1034,9 +1047,22 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 self.handle_script_execute(params)
             else:
                 self.send_error(404, "Not Found")
+        except ConnectionAbortedError as e:
+            logger.warning("Connection aborted during POST request: %s", str(e))
+            # Don't try to send an error response as the connection is already broken
+        except BrokenPipeError as e:
+            logger.warning("Broken pipe during POST request: %s", str(e))
+            # Don't try to send an error response as the connection is already broken
+        except ConnectionResetError as e:
+            logger.warning("Connection reset during POST request: %s", str(e))
+            # Don't try to send an error response as the connection is already broken
         except Exception as e:
             logger.error("Error handling POST request: %s", str(e))
-            self.send_error(500, str(e))
+            try:
+                self.send_error(500, str(e))
+            except (ConnectionAbortedError, BrokenPipeError, ConnectionResetError):
+                # Connection already closed, can't send error
+                pass
             
     def authenticate(self):
         """Validate API key."""
@@ -1050,24 +1076,33 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
         
     def send_json_response(self, data, status=200):
         """Send JSON response."""
-        response = json.dumps(data)
-        
-        self.send_response(status)
-        self.send_header('Content-Type', 'application/json')
-        
-        # Python 3 compatibility for content length
-        if sys.version_info[0] >= 3:
-            self.send_header('Content-Length', len(response.encode('utf-8')))
-        else:
-            self.send_header('Content-Length', len(response))
+        try:
+            response = json.dumps(data)
             
-        self.end_headers()
-        
-        # Python 3 compatibility for writing binary data
-        if sys.version_info[0] >= 3:
-            self.wfile.write(response.encode('utf-8'))
-        else:
-            self.wfile.write(response)
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            
+            # Python 3 compatibility for content length
+            if sys.version_info[0] >= 3:
+                self.send_header('Content-Length', len(response.encode('utf-8')))
+            else:
+                self.send_header('Content-Length', len(response))
+                
+            self.end_headers()
+            
+            # Python 3 compatibility for writing binary data
+            if sys.version_info[0] >= 3:
+                self.wfile.write(response.encode('utf-8'))
+            else:
+                self.wfile.write(response)
+        except ConnectionAbortedError as e:
+            logger.warning("Connection aborted while sending response: %s", str(e))
+        except BrokenPipeError as e:
+            logger.warning("Broken pipe while sending response: %s", str(e))
+        except ConnectionResetError as e:
+            logger.warning("Connection reset while sending response: %s", str(e))
+        except Exception as e:
+            logger.error("Error sending JSON response: %s", str(e))
         
     # Handler methods
     
