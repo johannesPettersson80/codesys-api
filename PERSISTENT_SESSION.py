@@ -48,13 +48,40 @@ class CodesysPersistentSession(object):
     def initialize(self):
         """Initialize the CODESYS environment."""
         try:
-            # Log initialization
-            self.log("Initializing CODESYS session")
+            # Log initialization with more details
+            self.log("Initializing CODESYS session - started")
+            self.log("Python version: " + sys.version)
+            self.log("Script directory: " + SCRIPT_DIR)
+            self.log("Request directory: " + REQUEST_DIR)
+            self.log("Result directory: " + RESULT_DIR)
+            
+            # Check if directories exist and are accessible
+            for directory in [REQUEST_DIR, RESULT_DIR]:
+                if not os.path.exists(directory):
+                    self.log("Creating directory: " + directory)
+                    os.makedirs(directory)
+                else:
+                    self.log("Directory exists: " + directory)
+
+            # Output scriptengine version if available
+            try:
+                self.log("ScriptEngine module loaded successfully")
+                if hasattr(scriptengine, 'version'):
+                    self.log("ScriptEngine version: " + str(scriptengine.version))
+            except Exception, e:
+                self.log("Error checking scriptengine version: " + str(e))
             
             # Initialize the system
+            self.log("Creating ScriptSystem instance...")
             self.system = scriptengine.ScriptSystem()
+            self.log("ScriptSystem created successfully")
             
-            # Update status
+            # Test system properties
+            if hasattr(self.system, 'version'):
+                self.log("CODESYS version: " + str(self.system.version))
+            
+            # Create initial status file
+            self.log("Creating status file...")
             self.update_status({
                 "state": "initialized",
                 "timestamp": time.time(),
@@ -67,6 +94,18 @@ class CodesysPersistentSession(object):
         except Exception, e:
             self.log("Initialization failed: %s" % str(e))
             self.log(traceback.format_exc())
+            
+            # Try to write error to status file
+            try:
+                self.update_status({
+                    "state": "error",
+                    "timestamp": time.time(),
+                    "error": str(e),
+                    "traceback": traceback.format_exc()
+                })
+            except:
+                pass
+                
             return False
             
     def run(self):

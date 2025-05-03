@@ -43,7 +43,7 @@ logger = logging.getLogger('codesys_api_server')
 # Constants
 SERVER_HOST = '0.0.0.0'
 SERVER_PORT = 8080
-CODESYS_PATH = r"C:\Program Files\CODESYS 3.5\CODESYS\CODESYS.exe"  # Update this path
+CODESYS_PATH = r"C:\Program Files\CODESYS 3.5.21.0\CODESYS\Common\CODESYS.exe"  # Path provided by user
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PERSISTENT_SCRIPT = os.path.join(SCRIPT_DIR, "PERSISTENT_SESSION.py")
 API_KEY_FILE = os.path.join(SCRIPT_DIR, "api_keys.json")
@@ -1073,26 +1073,71 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
     
     def handle_session_start(self):
         """Handle session/start endpoint."""
-        if not self.process_manager.start():
-            self.send_json_response({
-                "success": False,
-                "error": "Failed to start CODESYS session"
-            }, 500)
-            return
+        try:
+            logger.info("Session start requested - checking CODESYS process")
             
-        # Execute session start script
-        script = self.script_generator.generate_session_start_script()
-        result = self.script_executor.execute_script(script)
-        
-        if result.get("success", False):
-            self.send_json_response({
-                "success": True,
-                "message": "Session started"
-            })
-        else:
+            # First check if the process is already running
+            if self.process_manager.is_running():
+                logger.info("CODESYS process already running, using existing process")
+            else:
+                logger.info("CODESYS process not running, attempting to start")
+                
+                # Start the CODESYS process
+                if not self.process_manager.start():
+                    error_msg = "Failed to start CODESYS process"
+                    logger.error(error_msg)
+                    self.send_json_response({
+                        "success": False,
+                        "error": error_msg
+                    }, 500)
+                    return
+                    
+                logger.info("CODESYS process started successfully")
+                
+            # Generate and execute the session start script
+            try:
+                logger.info("Generating session start script")
+                script = self.script_generator.generate_session_start_script()
+                
+                logger.info("Executing session start script")
+                result = self.script_executor.execute_script(script, timeout=180)  # Longer timeout for initial session
+                
+                # Debug session start result
+                logger.info("Session start script execution completed")
+                logger.debug("Session start result: %s", str(result))
+                
+                if result.get("success", False):
+                    logger.info("Session started successfully")
+                    self.send_json_response({
+                        "success": True,
+                        "message": "Session started"
+                    })
+                else:
+                    error_msg = result.get("error", "Unknown error")
+                    logger.error("Error starting session: %s", error_msg)
+                    
+                    # Check for common errors
+                    if "timed out" in error_msg:
+                        logger.error("Session start timed out - check CODESYS installation and configuration")
+                    elif "not found" in error_msg and "CODESYS" in error_msg:
+                        logger.error("CODESYS executable not found - check CODESYS_PATH")
+                    
+                    self.send_json_response({
+                        "success": False,
+                        "error": error_msg
+                    }, 500)
+            except Exception as script_error:
+                logger.error("Error executing session start script: %s", str(script_error), exc_info=True)
+                self.send_json_response({
+                    "success": False,
+                    "error": f"Script execution error: {str(script_error)}"
+                }, 500)
+                
+        except Exception as e:
+            logger.error("Unhandled error in session start: %s", str(e), exc_info=True)
             self.send_json_response({
                 "success": False,
-                "error": result.get("error", "Unknown error")
+                "error": f"Internal server error: {str(e)}"
             }, 500)
             
     def handle_session_stop(self):
