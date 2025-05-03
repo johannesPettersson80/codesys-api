@@ -119,14 +119,14 @@ class CodesysPersistentSession(object):
                     else:
                         self.log("System instance accessed but version information not available")
                         
-                    # Basic test of system functionality
-                    if hasattr(self.system, 'projects'):
-                        project_count = len(self.system.projects) if hasattr(self.system.projects, '__len__') else "unknown"
-                        self.log("Projects available: " + str(project_count))
+                    # Basic test of system functionality - check if scriptengine.projects is available 
+                    if 'projects' in dir(scriptengine):
+                        project_count = len(scriptengine.projects) if hasattr(scriptengine.projects, '__len__') else "unknown"
+                        self.log("Projects available via global scriptengine.projects: " + str(project_count))
                         # Success - no need for more attempts
                         break
                     else:
-                        self.log("System doesn't have 'projects' attribute, which is unusual")
+                        self.log("Global scriptengine.projects not available, which is unusual")
                         # Try again
                         self.system = None
                         

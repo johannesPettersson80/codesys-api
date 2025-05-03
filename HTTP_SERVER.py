@@ -672,8 +672,10 @@ try:
         raise Exception("Cannot access scriptengine.system instance")
     
     print("Creating new project")
-    # Create new project
-    project = system.projects.create()
+    # Use the global projects instance
+    print("Using global scriptengine.projects instance")
+    # Create new project using the global projects instance
+    project = scriptengine.projects.create()
     
     print("Saving project to: {0}")
     # Save to specified path
@@ -713,11 +715,11 @@ import scriptengine
 import json
 
 try:
-    # Get system instance
-    system = session.system
+    # Use the global scriptengine instances
+    system = scriptengine.system
     
-    # Open project
-    project = system.projects.open("{0}")
+    # Open project using the global projects instance
+    project = scriptengine.projects.open("{0}")
     
     # Store as active project
     session.active_project = project
@@ -803,18 +805,20 @@ import json
 import os
 
 try:
-    # Get system instance
-    system = session.system
+    # Use the global scriptengine.system instance
+    system = scriptengine.system
     
+    # Use the global scriptengine.projects instance for project listing
     # Get recent projects list
     recent_projects = []
     
-    if hasattr(system, 'recent_projects'):
+    # Check for recent_projects attribute on global projects instance
+    if hasattr(scriptengine.projects, 'recent_projects'):
         # Direct access if available
-        recent_projects = system.recent_projects
-    elif hasattr(system, 'get_recent_projects'):
+        recent_projects = scriptengine.projects.recent_projects
+    elif hasattr(scriptengine.projects, 'get_recent_projects'):
         # Function call if available
-        recent_projects = system.get_recent_projects()
+        recent_projects = scriptengine.projects.get_recent_projects()
         
     # Format project list
     projects = []
