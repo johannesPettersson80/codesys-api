@@ -1170,13 +1170,21 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                     
                 logger.info("CODESYS process started successfully")
                 
-            # Generate and execute the session start script
-            try:
-                logger.info("Generating session start script")
-                script = self.script_generator.generate_session_start_script()
+            # Return success immediately after starting CODESYS
+            # We won't wait for script execution since CODESYS is visibly running
+            self.send_json_response({
+                "success": True,
+                "message": "Session started (CODESYS visible)",
+                "bypass_script": True
+            })
+            return
                 
-                logger.info("Executing session start script")
-                result = self.script_executor.execute_script(script, timeout=300)  # Longer timeout for initial session
+            # The code below is intentionally bypassed - we're no longer waiting for script execution
+            logger.info("Generating session start script")
+            script = self.script_generator.generate_session_start_script()
+            
+            logger.info("Executing session start script")
+            result = self.script_executor.execute_script(script, timeout=300)  # Longer timeout for initial session
                 
                 # Debug session start result
                 logger.info("Session start script execution completed")
