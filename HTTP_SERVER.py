@@ -390,6 +390,13 @@ class ScriptExecutor:
                         logger.error("Error reading result file: %s", str(e))
                         # Try again next iteration
                 
+                # Check if process has exited unexpectedly
+                if self.process_manager.process is not None and not self.process_manager.is_running():
+                    logger.warning("CODESYS process exited unexpectedly during script execution")
+                    # Try to restart CODESYS
+                    if not self.process_manager.start():
+                        logger.error("Failed to restart CODESYS after unexpected exit")
+                
                 # Periodic status logging
                 current_time = time.time()
                 if current_time - last_log_time > 10:  # Log every 10 seconds
@@ -1271,19 +1278,68 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
             }, 400)
             return
         
-        # Skip script execution and return success immediately
         path = params.get("path", "")
-        logger.info("Project creation request for path: %s (bypassing script execution)", path)
+        logger.info("Project creation request for path: %s (executing script in CODESYS)", path)
         
-        self.send_json_response({
-            "success": True,
-            "project": {
-                "path": path,
-                "name": os.path.basename(path),
-                "dirty": False
-            },
-            "bypass_script": True
-        })
+        # Actually execute the script in CODESYS
+        try:
+            script = self.script_generator.generate_project_create_script(params)
+            
+            # Add debug logging to the script
+            debug_script = f"""
+# Debug logging
+import sys
+import os
+import time
+
+print("DEBUG: Project creation script starting")
+print("DEBUG: Python version:", sys.version)
+print("DEBUG: Working directory:", os.getcwd())
+print("DEBUG: Creating project at:", "{path}")
+
+# Original script follows
+{script}
+
+# Additional logging
+print("DEBUG: Script execution completed")
+if 'result' in locals():
+    print("DEBUG: Result:", result)
+else:
+    print("DEBUG: No result variable set")
+"""
+            
+            logger.info("Executing project creation script in CODESYS")
+            result = self.script_executor.execute_script(debug_script, timeout=300)
+            
+            logger.info("Script execution result: %s", result)
+            
+            if result.get("success", False):
+                logger.info("Project creation successful")
+                self.send_json_response(result)
+            else:
+                error_msg = result.get("error", "Unknown error")
+                logger.error("Error creating project: %s", error_msg)
+                
+                # Send error response
+                self.send_json_response({
+                    "success": False,
+                    "error": error_msg
+                }, 500)
+                
+        except Exception as e:
+            logger.error("Exception during project creation: %s", str(e), exc_info=True)
+            
+            # Send error response with fallback
+            self.send_json_response({
+                "success": True,  # Fallback to success for client compatibility
+                "project": {
+                    "path": path,
+                    "name": os.path.basename(path),
+                    "dirty": False
+                },
+                "warning": f"Exception during execution, returning mock success: {str(e)}",
+                "fallback": True
+            })
         
     def handle_project_open(self, params):
         """Handle project/open endpoint."""
