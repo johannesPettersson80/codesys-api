@@ -153,9 +153,9 @@ def run_codesys_with_script():
         
         print(f"Setting PYTHONPATH to: {env['PYTHONPATH']}")
         
-        # Start CODESYS with the script
+        # Start CODESYS with the script using the correct --runscript parameter
         process = subprocess.Popen(
-            [CODESYS_PATH, "-script", TEST_SCRIPT_PATH],
+            [CODESYS_PATH, "--runscript", TEST_SCRIPT_PATH],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=env

@@ -135,7 +135,7 @@ class CodesysProcessManager:
                     
                     logger.info("Starting CODESYS with PYTHONPATH: %s", env["PYTHONPATH"])
                     self.process = subprocess.Popen(
-                        [self.codesys_path, "-script", self.script_path],
+                        [self.codesys_path, "--runscript", self.script_path],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         env=env
