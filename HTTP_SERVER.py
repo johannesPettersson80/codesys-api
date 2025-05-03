@@ -8,8 +8,9 @@ This script implements a HTTP server for the CODESYS API wrapper.
 It provides RESTful endpoints to interact with CODESYS through
 a persistent session.
 
-Note: This code is written for Python 2.7 compatibility to match
-the CODESYS IronPython 2.7 environment.
+Note: This script requires Python 3.x.
+The PERSISTENT_SESSION.py script uses Python 2.7 syntax for
+CODESYS IronPython 2.7 compatibility.
 """
 
 import sys
@@ -22,9 +23,14 @@ import tempfile
 import uuid
 import shutil
 import logging
-from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
-import urllib
-import urlparse
+
+# Python 3 compatibility imports
+try:
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import urllib.parse as urlparse
+except ImportError:
+    from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+    import urlparse
 
 # Setup logging
 logging.basicConfig(
@@ -52,7 +58,7 @@ for directory in [REQUEST_DIR, RESULT_DIR]:
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-class CodesysProcessManager(object):
+class CodesysProcessManager:
     """Manages the CODESYS process."""
     
     def __init__(self, codesys_path, script_path):
@@ -91,7 +97,7 @@ class CodesysProcessManager(object):
                 self.running = True
                 logger.info("CODESYS process started")
                 return True
-            except Exception, e:
+            except Exception as e:
                 logger.error("Error starting CODESYS process: %s", str(e))
                 return False
                 
@@ -127,7 +133,7 @@ class CodesysProcessManager(object):
                 self.running = False
                 logger.info("CODESYS process stopped")
                 return True
-            except Exception, e:
+            except Exception as e:
                 logger.error("Error stopping CODESYS process: %s", str(e))
                 return False
                 
@@ -146,12 +152,12 @@ class CodesysProcessManager(object):
                 
             with open(STATUS_FILE, 'r') as f:
                 return json.loads(f.read())
-        except Exception, e:
+        except Exception as e:
             logger.error("Error getting CODESYS status: %s", str(e))
             return {"state": "error", "timestamp": time.time(), "error": str(e)}
-            
 
-class ScriptExecutor(object):
+
+class ScriptExecutor:
     """Executes scripts through the CODESYS persistent session."""
     
     def __init__(self, request_dir, result_dir):
@@ -202,7 +208,7 @@ class ScriptExecutor(object):
             # Timeout
             self._cleanup_files(script_path, result_path, request_path)
             return {"success": False, "error": "Script execution timed out"}
-        except Exception, e:
+        except Exception as e:
             logger.error("Error executing script: %s", str(e))
             return {"success": False, "error": str(e)}
             
@@ -216,7 +222,7 @@ class ScriptExecutor(object):
                 pass
 
 
-class ScriptGenerator(object):
+class ScriptGenerator:
     """Generates scripts for different operations."""
     
     def generate_session_start_script(self):
@@ -234,7 +240,7 @@ try:
     
     # Return success
     result = {"success": True, "message": "Session started"}
-except Exception, e:
+except Exception as e:
     result = {"success": False, "error": str(e)}
 """
         
@@ -261,7 +267,7 @@ try:
             "path": session.active_project.path,
             "dirty": session.active_project.dirty
         }
-except Exception, e:
+except Exception as e:
     result = {"success": False, "error": str(e)}
 """
         
@@ -295,7 +301,7 @@ try:
             "dirty": project.dirty
         }}
     }}
-except Exception, e:
+except Exception as e:
     result = {{"success": False, "error": str(e)}}
 """.format(path.replace("\\", "\\\\"))
         
@@ -326,7 +332,7 @@ try:
             "dirty": project.dirty
         }}
     }}
-except Exception, e:
+except Exception as e:
     result = {{"success": False, "error": str(e)}}
 """.format(path.replace("\\", "\\\\"))
         
@@ -355,7 +361,7 @@ try:
                 "dirty": project.dirty
             }
         }
-except Exception, e:
+except Exception as e:
     result = {"success": False, "error": str(e)}
 """
         
@@ -386,7 +392,7 @@ try:
             "success": True,
             "project": project_info
         }
-except Exception, e:
+except Exception as e:
     result = {"success": False, "error": str(e)}
 """
 
@@ -426,7 +432,7 @@ try:
         "success": True,
         "projects": projects
     }
-except Exception, e:
+except Exception as e:
     result = {"success": False, "error": str(e)}
 """
 
@@ -486,7 +492,7 @@ try:
                 "has_errors": has_errors
             }}
         }}
-except Exception, e:
+except Exception as e:
     result = {{"success": False, "error": str(e)}}
 """.format(str(clean_build).lower())
         
@@ -565,7 +571,7 @@ try:
                 "language": "{3}"
             }}
         }}
-except Exception, e:
+except Exception as e:
     result = {{"success": False, "error": str(e)}}
 """.format(name, pou_type, parent_path, language)
         
@@ -627,7 +633,7 @@ try:
                 "success": True,
                 "message": "POU code updated"
             }}
-except Exception, e:
+except Exception as e:
     result = {{"success": False, "error": str(e)}}
 """.format(pou_path, code)
 
@@ -711,7 +717,7 @@ try:
             "success": True,
             "pous": pous
         }}
-except Exception, e:
+except Exception as e:
     result = {{"success": False, "error": str(e)}}
 """.format(parent_path)
         
@@ -722,7 +728,7 @@ except Exception, e:
         return script
 
 
-class ApiKeyManager(object):
+class ApiKeyManager:
     """Manages API keys for authentication."""
     
     def __init__(self, key_file_path):
@@ -797,7 +803,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 self.handle_system_logs()
             else:
                 self.send_error(404, "Not Found")
-        except Exception, e:
+        except Exception as e:
             logger.error("Error handling GET request: %s", str(e))
             self.send_error(500, str(e))
             
@@ -810,7 +816,12 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
             
             # Read request body
             content_length = int(self.headers.get('Content-Length', 0))
-            post_data = self.rfile.read(content_length)
+            
+            # Python 3 compatibility for reading binary data
+            if sys.version_info[0] >= 3:
+                post_data = self.rfile.read(content_length).decode('utf-8')
+            else:
+                post_data = self.rfile.read(content_length)
             
             params = {}
             if content_length > 0:
@@ -846,7 +857,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 self.handle_script_execute(params)
             else:
                 self.send_error(404, "Not Found")
-        except Exception, e:
+        except Exception as e:
             logger.error("Error handling POST request: %s", str(e))
             self.send_error(500, str(e))
             
@@ -866,10 +877,20 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
         
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
-        self.send_header('Content-Length', len(response))
+        
+        # Python 3 compatibility for content length
+        if sys.version_info[0] >= 3:
+            self.send_header('Content-Length', len(response.encode('utf-8')))
+        else:
+            self.send_header('Content-Length', len(response))
+            
         self.end_headers()
         
-        self.wfile.write(response)
+        # Python 3 compatibility for writing binary data
+        if sys.version_info[0] >= 3:
+            self.wfile.write(response.encode('utf-8'))
+        else:
+            self.wfile.write(response)
         
     # Handler methods
     
@@ -1121,7 +1142,7 @@ def run_server():
         
         # Create server
         def handler(*args):
-            CodesysApiHandler(
+            return CodesysApiHandler(
                 process_manager=process_manager,
                 script_executor=script_executor,
                 script_generator=script_generator,
@@ -1138,7 +1159,7 @@ def run_server():
         server.serve_forever()
     except KeyboardInterrupt:
         print("Server stopped")
-    except Exception, e:
+    except Exception as e:
         print("Error starting server: " + str(e))
         logger.error("Error starting server: %s", str(e))
     finally:

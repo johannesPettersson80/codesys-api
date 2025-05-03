@@ -24,11 +24,16 @@ import sys
 import os
 import logging
 import time
-import HTTP_SERVER
 import servicemanager
 import win32event
 import win32service
 import win32serviceutil
+
+# Python 3 compatibility imports
+try:
+    from http.server import HTTPServer
+except ImportError:
+    from BaseHTTPServer import HTTPServer
 
 # Setup logging for the Windows service
 logging.basicConfig(
@@ -37,6 +42,9 @@ logging.basicConfig(
     filename='codesys_api_service.log'
 )
 logger = logging.getLogger('codesys_api_service')
+
+# Import server module
+import HTTP_SERVER
 
 class CodesysAPIService(win32serviceutil.ServiceFramework):
     """Windows Service for CODESYS API."""
@@ -79,8 +87,6 @@ class CodesysAPIService(win32serviceutil.ServiceFramework):
             api_key_manager = HTTP_SERVER.ApiKeyManager(HTTP_SERVER.API_KEY_FILE)
             
             # Create server
-            from BaseHTTPServer import HTTPServer
-            
             def handler(*args):
                 HTTP_SERVER.CodesysApiHandler(
                     process_manager=process_manager,
@@ -122,7 +128,7 @@ class CodesysAPIService(win32serviceutil.ServiceFramework):
             process_manager.stop()
             
             logger.info("Service stopped")
-        except Exception, e:
+        except Exception as e:
             logger.error("Error in service: %s", str(e))
             
             # Attempt to stop any running components

@@ -2,13 +2,14 @@
 # -*- coding: utf-8 -*-
 
 """
-CODESYS API HTTP Server (Python 3 Compatible)
+CODESYS API HTTP Server
 
 This script implements a HTTP server for the CODESYS API wrapper.
 It provides RESTful endpoints to interact with CODESYS through
 a persistent session.
 
-Note: This version is adapted for Python 3.x compatibility
+Note: This code is written for Python 2.7 compatibility to match
+the CODESYS IronPython 2.7 environment.
 """
 
 import sys
@@ -21,14 +22,9 @@ import tempfile
 import uuid
 import shutil
 import logging
-
-# Python 3 compatibility imports
-try:
-    from http.server import HTTPServer, BaseHTTPRequestHandler
-    import urllib.parse as urlparse
-except ImportError:
-    from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
-    import urlparse
+from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+import urllib
+import urlparse
 
 # Setup logging
 logging.basicConfig(
@@ -43,7 +39,7 @@ SERVER_HOST = '0.0.0.0'
 SERVER_PORT = 8080
 CODESYS_PATH = r"C:\Program Files\CODESYS 3.5\CODESYS\CODESYS.exe"  # Update this path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PERSISTENT_SCRIPT = os.path.join(SCRIPT_DIR, "PERSISTENT_SESSION_PY3.py")
+PERSISTENT_SCRIPT = os.path.join(SCRIPT_DIR, "PERSISTENT_SESSION.py")
 API_KEY_FILE = os.path.join(SCRIPT_DIR, "api_keys.json")
 REQUEST_DIR = os.path.join(SCRIPT_DIR, "requests")
 RESULT_DIR = os.path.join(SCRIPT_DIR, "results")
@@ -56,7 +52,7 @@ for directory in [REQUEST_DIR, RESULT_DIR]:
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-class CodesysProcessManager:
+class CodesysProcessManager(object):
     """Manages the CODESYS process."""
     
     def __init__(self, codesys_path, script_path):
@@ -95,7 +91,7 @@ class CodesysProcessManager:
                 self.running = True
                 logger.info("CODESYS process started")
                 return True
-            except Exception as e:
+            except Exception, e:
                 logger.error("Error starting CODESYS process: %s", str(e))
                 return False
                 
@@ -131,7 +127,7 @@ class CodesysProcessManager:
                 self.running = False
                 logger.info("CODESYS process stopped")
                 return True
-            except Exception as e:
+            except Exception, e:
                 logger.error("Error stopping CODESYS process: %s", str(e))
                 return False
                 
@@ -150,12 +146,12 @@ class CodesysProcessManager:
                 
             with open(STATUS_FILE, 'r') as f:
                 return json.loads(f.read())
-        except Exception as e:
+        except Exception, e:
             logger.error("Error getting CODESYS status: %s", str(e))
             return {"state": "error", "timestamp": time.time(), "error": str(e)}
+            
 
-
-class ScriptExecutor:
+class ScriptExecutor(object):
     """Executes scripts through the CODESYS persistent session."""
     
     def __init__(self, request_dir, result_dir):
@@ -206,7 +202,7 @@ class ScriptExecutor:
             # Timeout
             self._cleanup_files(script_path, result_path, request_path)
             return {"success": False, "error": "Script execution timed out"}
-        except Exception as e:
+        except Exception, e:
             logger.error("Error executing script: %s", str(e))
             return {"success": False, "error": str(e)}
             
@@ -220,7 +216,7 @@ class ScriptExecutor:
                 pass
 
 
-class ScriptGenerator:
+class ScriptGenerator(object):
     """Generates scripts for different operations."""
     
     def generate_session_start_script(self):
@@ -238,7 +234,7 @@ try:
     
     # Return success
     result = {"success": True, "message": "Session started"}
-except Exception as e:
+except Exception, e:
     result = {"success": False, "error": str(e)}
 """
         
@@ -265,7 +261,7 @@ try:
             "path": session.active_project.path,
             "dirty": session.active_project.dirty
         }
-except Exception as e:
+except Exception, e:
     result = {"success": False, "error": str(e)}
 """
         
@@ -299,7 +295,7 @@ try:
             "dirty": project.dirty
         }}
     }}
-except Exception as e:
+except Exception, e:
     result = {{"success": False, "error": str(e)}}
 """.format(path.replace("\\", "\\\\"))
         
@@ -330,7 +326,7 @@ try:
             "dirty": project.dirty
         }}
     }}
-except Exception as e:
+except Exception, e:
     result = {{"success": False, "error": str(e)}}
 """.format(path.replace("\\", "\\\\"))
         
@@ -359,7 +355,7 @@ try:
                 "dirty": project.dirty
             }
         }
-except Exception as e:
+except Exception, e:
     result = {"success": False, "error": str(e)}
 """
         
@@ -390,7 +386,7 @@ try:
             "success": True,
             "project": project_info
         }
-except Exception as e:
+except Exception, e:
     result = {"success": False, "error": str(e)}
 """
 
@@ -430,7 +426,7 @@ try:
         "success": True,
         "projects": projects
     }
-except Exception as e:
+except Exception, e:
     result = {"success": False, "error": str(e)}
 """
 
@@ -490,7 +486,7 @@ try:
                 "has_errors": has_errors
             }}
         }}
-except Exception as e:
+except Exception, e:
     result = {{"success": False, "error": str(e)}}
 """.format(str(clean_build).lower())
         
@@ -569,7 +565,7 @@ try:
                 "language": "{3}"
             }}
         }}
-except Exception as e:
+except Exception, e:
     result = {{"success": False, "error": str(e)}}
 """.format(name, pou_type, parent_path, language)
         
@@ -631,7 +627,7 @@ try:
                 "success": True,
                 "message": "POU code updated"
             }}
-except Exception as e:
+except Exception, e:
     result = {{"success": False, "error": str(e)}}
 """.format(pou_path, code)
 
@@ -715,7 +711,7 @@ try:
             "success": True,
             "pous": pous
         }}
-except Exception as e:
+except Exception, e:
     result = {{"success": False, "error": str(e)}}
 """.format(parent_path)
         
@@ -726,7 +722,7 @@ except Exception as e:
         return script
 
 
-class ApiKeyManager:
+class ApiKeyManager(object):
     """Manages API keys for authentication."""
     
     def __init__(self, key_file_path):
@@ -801,7 +797,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 self.handle_system_logs()
             else:
                 self.send_error(404, "Not Found")
-        except Exception as e:
+        except Exception, e:
             logger.error("Error handling GET request: %s", str(e))
             self.send_error(500, str(e))
             
@@ -814,12 +810,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
             
             # Read request body
             content_length = int(self.headers.get('Content-Length', 0))
-            
-            # Python 3 compatibility for reading binary data
-            if sys.version_info[0] >= 3:
-                post_data = self.rfile.read(content_length).decode('utf-8')
-            else:
-                post_data = self.rfile.read(content_length)
+            post_data = self.rfile.read(content_length)
             
             params = {}
             if content_length > 0:
@@ -855,7 +846,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 self.handle_script_execute(params)
             else:
                 self.send_error(404, "Not Found")
-        except Exception as e:
+        except Exception, e:
             logger.error("Error handling POST request: %s", str(e))
             self.send_error(500, str(e))
             
@@ -875,20 +866,10 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
         
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
-        
-        # Python 3 compatibility for content length
-        if sys.version_info[0] >= 3:
-            self.send_header('Content-Length', len(response.encode('utf-8')))
-        else:
-            self.send_header('Content-Length', len(response))
-            
+        self.send_header('Content-Length', len(response))
         self.end_headers()
         
-        # Python 3 compatibility for writing binary data
-        if sys.version_info[0] >= 3:
-            self.wfile.write(response.encode('utf-8'))
-        else:
-            self.wfile.write(response)
+        self.wfile.write(response)
         
     # Handler methods
     
@@ -1140,7 +1121,7 @@ def run_server():
         
         # Create server
         def handler(*args):
-            return CodesysApiHandler(
+            CodesysApiHandler(
                 process_manager=process_manager,
                 script_executor=script_executor,
                 script_generator=script_generator,
@@ -1157,7 +1138,7 @@ def run_server():
         server.serve_forever()
     except KeyboardInterrupt:
         print("Server stopped")
-    except Exception as e:
+    except Exception, e:
         print("Error starting server: " + str(e))
         logger.error("Error starting server: %s", str(e))
     finally:

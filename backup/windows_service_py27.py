@@ -2,18 +2,18 @@
 # -*- coding: utf-8 -*-
 
 """
-CODESYS API Windows Service (Python 3 Compatible)
+CODESYS API Windows Service
 
 This script allows the CODESYS API to run as a Windows service.
 It handles service installation, start, stop, and other lifecycle events.
 
 Usage:
-    python windows_service_py3.py install   - Install the service
-    python windows_service_py3.py remove    - Remove the service
-    python windows_service_py3.py start     - Start the service
-    python windows_service_py3.py stop      - Stop the service
-    python windows_service_py3.py restart   - Restart the service
-    python windows_service_py3.py update    - Update the service
+    python windows_service.py install   - Install the service
+    python windows_service.py remove    - Remove the service
+    python windows_service.py start     - Start the service
+    python windows_service.py stop      - Stop the service
+    python windows_service.py restart   - Restart the service
+    python windows_service.py update    - Update the service
 
 Note:
     Requires pywin32 to be installed:
@@ -35,6 +35,8 @@ try:
 except ImportError:
     from BaseHTTPServer import HTTPServer
 
+import HTTP_SERVER
+
 # Setup logging for the Windows service
 logging.basicConfig(
     level=logging.INFO,
@@ -42,9 +44,6 @@ logging.basicConfig(
     filename='codesys_api_service.log'
 )
 logger = logging.getLogger('codesys_api_service')
-
-# Import server module
-import HTTP_SERVER_PY3
 
 class CodesysAPIService(win32serviceutil.ServiceFramework):
     """Windows Service for CODESYS API."""
@@ -75,20 +74,20 @@ class CodesysAPIService(win32serviceutil.ServiceFramework):
         # Setup HTTP Server and other components
         try:
             # Create managers
-            process_manager = HTTP_SERVER_PY3.CodesysProcessManager(
-                HTTP_SERVER_PY3.CODESYS_PATH, 
-                HTTP_SERVER_PY3.PERSISTENT_SCRIPT
+            process_manager = HTTP_SERVER.CodesysProcessManager(
+                HTTP_SERVER.CODESYS_PATH, 
+                HTTP_SERVER.PERSISTENT_SCRIPT
             )
-            script_executor = HTTP_SERVER_PY3.ScriptExecutor(
-                HTTP_SERVER_PY3.REQUEST_DIR, 
-                HTTP_SERVER_PY3.RESULT_DIR
+            script_executor = HTTP_SERVER.ScriptExecutor(
+                HTTP_SERVER.REQUEST_DIR, 
+                HTTP_SERVER.RESULT_DIR
             )
-            script_generator = HTTP_SERVER_PY3.ScriptGenerator()
-            api_key_manager = HTTP_SERVER_PY3.ApiKeyManager(HTTP_SERVER_PY3.API_KEY_FILE)
+            script_generator = HTTP_SERVER.ScriptGenerator()
+            api_key_manager = HTTP_SERVER.ApiKeyManager(HTTP_SERVER.API_KEY_FILE)
             
             # Create server
             def handler(*args):
-                HTTP_SERVER_PY3.CodesysApiHandler(
+                HTTP_SERVER.CodesysApiHandler(
                     process_manager=process_manager,
                     script_executor=script_executor,
                     script_generator=script_generator,
@@ -96,9 +95,9 @@ class CodesysAPIService(win32serviceutil.ServiceFramework):
                     *args
                 )
                 
-            server = HTTPServer((HTTP_SERVER_PY3.SERVER_HOST, HTTP_SERVER_PY3.SERVER_PORT), handler)
+            server = HTTPServer((HTTP_SERVER.SERVER_HOST, HTTP_SERVER.SERVER_PORT), handler)
             
-            logger.info("Starting server on %s:%d", HTTP_SERVER_PY3.SERVER_HOST, HTTP_SERVER_PY3.SERVER_PORT)
+            logger.info("Starting server on %s:%d", HTTP_SERVER.SERVER_HOST, HTTP_SERVER.SERVER_PORT)
             
             # Start the server in a separate thread
             import threading

@@ -6,7 +6,9 @@ This document provides detailed instructions for installing and setting up the C
 
 - Windows Operating System (Windows 10 or Windows Server 2016+)
 - CODESYS 3.5 or later installed
-- Python 2.7.x installed (Python 3.x is not supported due to CODESYS using IronPython 2.7)
+- Python 3.x installed
+  - Note: Only the script that runs inside CODESYS maintains Python 2.7 compatibility
+  - All other server and client code requires Python 3.x
 - Administrator privileges on the target system
 
 ## Required Python packages
@@ -47,9 +49,24 @@ By default, the system uses a single API key `admin`. For production use, you sh
    }
    ```
 
-### 4. Install as a Windows Service
+### 3. Install as a Windows Service
 
-To install the API server as a Windows service:
+#### Using the Installation Script
+
+The simplest way to install is to use the provided installation script:
+
+```
+install.bat
+```
+
+If you prefer not to install as a Windows service, you can simply run:
+```
+start_server.bat
+```
+
+#### Manual Service Installation
+
+Alternatively, you can install the service manually:
 
 1. Open a Command Prompt with Administrator privileges
 2. Navigate to the directory where you extracted the files
@@ -64,7 +81,7 @@ To install the API server as a Windows service:
 
 The service will now start automatically when the system boots.
 
-### 5. Test the Installation
+### 4. Test the Installation
 
 1. Open a Command Prompt or PowerShell window
 2. Use curl or a similar tool to make a request to the API:
@@ -89,6 +106,11 @@ If you prefer to run the API server manually without installing it as a service:
    ```
    python HTTP_SERVER.py
    ```
+   
+   Or use the provided script:
+   ```
+   start_server.bat
+   ```
 4. The server will start and display a message indicating it's running
 
 Press Ctrl+C to stop the server when running manually.
@@ -109,9 +131,11 @@ The API server creates and uses the following directories:
 ### Service Fails to Start
 
 1. Check the `codesys_api_service.log` file for error messages
-2. Verify the path to CODESYS.exe is correct in `HTTP_SERVER.py`
+2. Verify the path to CODESYS.exe is correct in the server file (`HTTP_SERVER.py` or `HTTP_SERVER_PY3.py`)
 3. Ensure all required Python packages are installed
 4. Check Windows Event Viewer for service-related errors
+5. Make sure you're using the correct Python version (2.7 or 3.x) with the appropriate scripts
+6. If using Python 3.x, ensure you're using `windows_service_py3.py` instead of `windows_service.py`
 
 ### API Returns Errors
 
@@ -119,6 +143,9 @@ The API server creates and uses the following directories:
 2. Check the `session.log` file for CODESYS session errors
 3. Verify CODESYS is installed and working correctly
 4. Try running the server manually to see any console output
+5. For Python 3.x compatibility issues, make sure you're using the correct version of files:
+   - Use `HTTP_SERVER_PY3.py` instead of `HTTP_SERVER.py`
+   - Use `example_client_py3.py` instead of `example_client.py`
 
 ### Authentication Issues
 
@@ -140,6 +167,11 @@ To remove the Windows service:
    ```
    python windows_service.py remove
    ```
+   Or use the provided script:
+   ```
+   uninstall.bat
+   ```
+
 5. Delete the directory containing the API server files
 
 ## Security Considerations
@@ -184,3 +216,15 @@ To change logging settings:
 ### Rate Limiting
 
 Rate limiting is not implemented by default. Consider using a reverse proxy like Nginx or Apache for rate limiting in production environments.
+
+## Python Version Compatibility
+
+### Python Version Requirements
+
+This API wrapper requires Python 3.x for all components except the script that runs inside CODESYS:
+
+1. **CODESYS Internal Scripts**: The `PERSISTENT_SESSION.py` script maintains Python 2.7 compatibility to match CODESYS's IronPython 2.7 environment.
+2. **Server Components**: All server components (HTTP server, Windows service) require Python 3.x.
+3. **Client Components**: All client components require Python 3.x.
+
+The project initially supported both Python 2.7 and 3.x, but has been consolidated to only support Python 3.x for simplicity and better maintainability.

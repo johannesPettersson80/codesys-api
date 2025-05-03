@@ -2,14 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-CODESYS API Example Client
+CODESYS API Example Client (Python 3 Compatible)
 
 This script demonstrates how to use the CODESYS REST API
 to perform common operations like starting a session, creating
 a project, adding POUs, etc.
 
-Note: This code is written for Python 2.7 compatibility to match
-the CODESYS API server, but it should work with Python 3 with minimal changes.
+Note: This version is compatible with Python 3.x
 """
 
 import sys
@@ -244,7 +243,7 @@ def example_workflow():
         
         # Return result
         result = {"success": True, "version": version}
-    except Exception, e:
+    except Exception as e:
         result = {"success": False, "error": str(e)}
     """
     

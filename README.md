@@ -3,7 +3,7 @@
 ![CODESYS API Logo](https://via.placeholder.com/1200x300/0073CF/FFFFFF?text=CODESYS+REST+API)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-2.7-blue.svg)](https://www.python.org/downloads/release/python-2716/)
+[![Python Version](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/downloads/)
 [![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)]()
 
 A persistent RESTful API wrapper for CODESYS automation software, allowing for seamless integration with other systems and automation of CODESYS operations.
@@ -25,7 +25,9 @@ A persistent RESTful API wrapper for CODESYS automation software, allowing for s
 ### Prerequisites
 
 - Windows OS with CODESYS 3.5 or later installed
-- Python 2.7.x installed (Python 3.x is not supported due to CODESYS using IronPython 2.7)
+- Python 3.x installed
+  - Note: Only the script that runs inside CODESYS maintains Python 2.7 compatibility
+  - All other server and client code requires Python 3.x
 - Administrator privileges (for service installation)
 
 ### Installation
@@ -50,12 +52,17 @@ A persistent RESTful API wrapper for CODESYS automation software, allowing for s
    install.bat
    ```
 
+   If you prefer not to install as a Windows service, use:
+   ```
+   start_server.bat
+   ```
+
 5. Verify the installation:
    ```
    python example_client.py
    ```
 
-For detailed installation instructions, see the [Installation Guide](INSTALLATION_GUIDE.md).
+For detailed installation instructions, see the [Installation Guide](INSTALLATION_GUIDE.md) and [CODESYS Script Compatibility Guide](CODESYS_SCRIPT_COMPATIBILITY.md).
 
 ## 📖 API Documentation
 

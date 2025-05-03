@@ -1,5 +1,5 @@
 @echo off
-REM CODESYS REST API Installation Script
+REM CODESYS REST API Installation Script (Python 3)
 SETLOCAL EnableDelayedExpansion
 
 echo CODESYS REST API Installation
@@ -18,21 +18,23 @@ REM Check for Python installation
 python --version 2>nul
 IF %ERRORLEVEL% NEQ 0 (
     echo ERROR: Python is not installed or not in PATH.
-    echo Please install Python 2.7 and try again.
+    echo Please install Python and try again.
     goto :EOF
 )
 
 REM Check Python version
-python -c "import sys; print('Good' if sys.version_info[0] == 2 else 'Bad')" > temp.txt
-SET /p PYTHON_VERSION=<temp.txt
+python -c "import sys; print(sys.version_info[0])" > temp.txt
+SET /p PYTHON_MAJOR_VERSION=<temp.txt
 DEL temp.txt
-IF "%PYTHON_VERSION%" NEQ "Good" (
-    echo WARNING: You are using Python 3.x. This may not be compatible with CODESYS API.
-    echo          The CODESYS scripting environment uses Python 2.7.
-    echo.
-    set /p CONTINUE=Do you want to continue anyway? [Y/N]: 
-    IF /I "!CONTINUE!" NEQ "Y" goto :EOF
+
+IF %PYTHON_MAJOR_VERSION% LSS 3 (
+    echo ERROR: This script requires Python 3.
+    echo You are using Python 2.x.
+    echo Please install Python 3 and try again.
+    goto :EOF
 )
+
+echo Python %PYTHON_MAJOR_VERSION% detected.
 
 REM Install required packages
 echo Installing required Python packages...
@@ -49,13 +51,23 @@ mkdir requests 2>nul
 mkdir results 2>nul
 
 REM Check CODESYS path
-set CODESYS_PATH="C:\Program Files\CODESYS 3.5\CODESYS\CODESYS.exe"
-IF NOT EXIST %CODESYS_PATH% (
-    echo WARNING: Default CODESYS path not found: %CODESYS_PATH%
+set DEFAULT_CODESYS_PATH="C:\Program Files\CODESYS 3.5\CODESYS\CODESYS.exe"
+IF NOT EXIST %DEFAULT_CODESYS_PATH% (
+    echo WARNING: Default CODESYS path not found: %DEFAULT_CODESYS_PATH%
     echo.
-    echo You will need to update the CODESYS_PATH variable in HTTP_SERVER.py
-    echo to point to your CODESYS installation.
-    echo.
+    echo Please enter the correct path to CODESYS.exe:
+    set /p CUSTOM_PATH=
+    
+    IF EXIST "!CUSTOM_PATH!" (
+        echo Updating CODESYS path in HTTP_SERVER.py...
+        REM Using PowerShell to safely handle the path
+        powershell -Command "$content = Get-Content -Path 'HTTP_SERVER.py' -Raw; $pattern = 'CODESYS_PATH = r\\\".*\\\"'; $replacement = 'CODESYS_PATH = r\"!CUSTOM_PATH!\"'; $content = $content -replace $pattern, $replacement; Set-Content -Path 'HTTP_SERVER.py' -Value $content;"
+    ) ELSE (
+        echo WARNING: The specified path does not exist. You will need to manually update
+        echo          the CODESYS_PATH variable in HTTP_SERVER.py before using the API.
+    )
+) ELSE (
+    echo CODESYS path found at default location: %DEFAULT_CODESYS_PATH%
 )
 
 REM Install Windows service
