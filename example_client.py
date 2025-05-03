@@ -42,9 +42,9 @@ def call_api(method, endpoint, data=None, params=None):
     
     try:
         if method.upper() == 'GET':
-            response = session.get(url, params=params, timeout=310)  # Increased timeout
+            response = session.get(url, params=params, timeout=60)  # Reasonable timeout
         elif method.upper() == 'POST':
-            response = session.post(url, json=data, timeout=310)  # Increased timeout
+            response = session.post(url, json=data, timeout=60)  # Reasonable timeout
         else:
             raise ValueError("Unsupported HTTP method: {0}".format(method))
             

@@ -41,7 +41,7 @@ session.headers.update({
 })
 
 
-def call_api(method, endpoint, data=None, params=None, timeout=600):
+def call_api(method, endpoint, data=None, params=None, timeout=60):
     """Make an API call to the CODESYS REST API with detailed logging."""
     url = "{0}/{1}".format(API_BASE_URL, endpoint)
     
@@ -93,7 +93,7 @@ def start_session():
     for attempt in range(1, max_attempts + 1):
         logger.info(f"Attempt {attempt} of {max_attempts} to start session...")
         try:
-            result = call_api('POST', 'session/start', timeout=300)
+            result = call_api('POST', 'session/start', timeout=60)
             if result.get('success', False):
                 logger.info("Session started successfully")
                 return True

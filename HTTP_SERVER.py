@@ -301,12 +301,12 @@ class ScriptExecutor:
         self.request_dir = request_dir
         self.result_dir = result_dir
         
-    def execute_script(self, script_content, timeout=600):
+    def execute_script(self, script_content, timeout=60):
         """Execute a script and return the result.
         
         Args:
             script_content (str): The script content to execute
-            timeout (int): Timeout in seconds (default: 600 - increased for complex operations)
+            timeout (int): Timeout in seconds (default: 60 seconds)
             
         Returns:
             dict: The result of the script execution
@@ -1511,8 +1511,8 @@ print("DEBUG: Final result:", result)
 """
             
             logger.info("Executing project creation script in CODESYS")
-            # Execute with increased timeout
-            result = self.script_executor.execute_script(debug_script, timeout=600)
+            # Execute with a reasonable timeout (60 seconds)
+            result = self.script_executor.execute_script(debug_script, timeout=60)
             
             logger.info("Script execution result: %s", result)
             
