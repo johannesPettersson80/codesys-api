@@ -106,9 +106,10 @@ class CodesysPersistentSession(object):
             
             for attempt in range(max_attempts):
                 try:
-                    self.log("Creating ScriptSystem instance (attempt %d of %d)..." % (attempt+1, max_attempts))
-                    self.system = scriptengine.ScriptSystem()
-                    self.log("ScriptSystem created successfully")
+                    self.log("Getting global scriptengine.system instance (attempt %d of %d)..." % (attempt+1, max_attempts))
+                    # Use the global system instance provided by scriptengine
+                    self.system = scriptengine.system
+                    self.log("Global system instance accessed successfully")
                     
                     # Test system properties
                     if hasattr(self.system, 'version'):
@@ -116,7 +117,7 @@ class CodesysPersistentSession(object):
                     elif hasattr(self.system, 'get_version'):
                         self.log("CODESYS version (via method): " + str(self.system.get_version()))
                     else:
-                        self.log("System created but version information not available")
+                        self.log("System instance accessed but version information not available")
                         
                     # Basic test of system functionality
                     if hasattr(self.system, 'projects'):

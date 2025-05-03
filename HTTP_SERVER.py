@@ -485,7 +485,7 @@ class ScriptExecutor:
             
             # If we've timed out, but CODESYS appears to be running,
             # return a mock success result to allow the client to continue
-            if script_content.strip().startswith("import scriptengine") and "system = scriptengine.ScriptSystem()" in script_content:
+            if script_content.strip().startswith("import scriptengine") and "system = scriptengine.system" in script_content:
                 # This looks like a session initialization script
                 logger.warning("Script execution timed out, but CODESYS appears to be running. Returning mock success.")
                 
@@ -592,18 +592,23 @@ class ScriptGenerator:
         return """
 import scriptengine
 import json
+import sys
 
 try:
-    # Initialize system
-    system = scriptengine.ScriptSystem()
+    # Use the global system instance provided by scriptengine
+    # IMPORTANT: scriptengine.system is a pre-existing instance
+    print("Using global scriptengine.system instance")
+    system = scriptengine.system
     
     # Store system instance
     session.system = system
     
     # Return success
     result = {"success": True, "message": "Session started"}
-except Exception as e:
-    result = {"success": False, "error": str(e)}
+except:
+    # IronPython 2.7 style exception handling (no 'as e' syntax)
+    error_type, error_value, error_traceback = sys.exc_info()
+    result = {"success": False, "error": str(error_value)}
 """
         
     def generate_session_status_script(self):
@@ -640,6 +645,7 @@ except Exception as e:
         path = path.replace("/", "\\")
         
         # Create a script compatible with IronPython 2.7 (no 'as' syntax for exceptions)
+        # Use the global scriptengine.system instance instead of trying to create ScriptSystem()
         return """
 # Basic script to create a project - IronPython 2.7 compatible
 import scriptengine
@@ -652,22 +658,18 @@ try:
     print("Starting project creation script")
     print("Python version: " + sys.version)
     
-    # Check if system is available or create it
-    if not hasattr(session, 'system') or session.system is None:
-        print("Creating new ScriptSystem instance")
-        try:
-            session.system = scriptengine.ScriptSystem()
-        except:
-            error_type, error_value, error_traceback = sys.exc_info()
-            print("Error creating ScriptSystem: " + str(error_value))
-            raise
+    # Use the global system instance provided by scriptengine
+    # IMPORTANT: scriptengine.system is a pre-existing instance
+    # NOT scriptengine.ScriptSystem() or session.system
+    print("Using global scriptengine.system instance")
+    system = scriptengine.system
     
-    # Get system instance
-    system = session.system
+    # Store system in session for future reference
+    session.system = system
     
     if system is None:
-        print("System is still None after creation attempt")
-        raise Exception("Cannot create ScriptSystem instance")
+        print("Global system instance is None")
+        raise Exception("Cannot access scriptengine.system instance")
     
     print("Creating new project")
     # Create new project
