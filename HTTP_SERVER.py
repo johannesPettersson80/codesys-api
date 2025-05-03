@@ -621,87 +621,37 @@ except Exception as e:
         return """
 import scriptengine
 import json
-import os
-import traceback
 
 try:
-    # Log each step for easier debugging
-    print("Starting project creation script")
-    print("Target project path: {0}")
-    
-    # Ensure the target directory exists
-    target_dir = os.path.dirname("{0}")
-    print("Target directory: " + target_dir)
-    
-    if not os.path.exists(target_dir):
-        try:
-            print("Creating target directory...")
-            os.makedirs(target_dir)
-            print("Target directory created: " + target_dir)
-        except Exception as dir_error:
-            print("Error creating directory: " + str(dir_error))
-            raise
-    else:
-        print("Target directory already exists")
+    # Minimal script for project creation
+    print("Starting minimal project creation script")
     
     # Get system instance
-    print("Getting system instance...")
     system = session.system
-    print("System instance obtained")
     
     # Create new project
-    print("Creating new project...")
     project = system.projects.create()
-    print("New project created")
-    
-    # Log project properties
-    print("Initial project properties:")
-    print("Project path: " + (project.path if hasattr(project, 'path') else "N/A"))
-    print("Project name: " + (project.name if hasattr(project, 'name') else "N/A"))
-    print("Project dirty: " + str(project.dirty if hasattr(project, 'dirty') else "N/A"))
     
     # Save to specified path
-    print("Saving project to: {0}")
     project.save_as("{0}")
-    print("Project saved successfully")
-    
-    # Verify the project was saved
-    print("Verifying project save...")
-    if hasattr(project, 'path'):
-        saved_path = project.path
-        print("Project path after save: " + saved_path)
-        if not os.path.exists(saved_path):
-            print("WARNING: Project file does not exist at: " + saved_path)
-    else:
-        print("WARNING: Project has no path attribute after save")
     
     # Store as active project
-    print("Setting as active project...")
     session.active_project = project
-    print("Project set as active")
     
-    # Return project info with detailed information
+    # Return simple success result
     result = {{
         "success": True,
         "project": {{
             "path": project.path if hasattr(project, 'path') else "Unknown",
-            "name": project.name if hasattr(project, 'name') else "Unknown",
-            "dirty": project.dirty if hasattr(project, 'dirty') else False,
-            "file_exists": os.path.exists(project.path) if hasattr(project, 'path') else False,
-            "requested_path": "{0}"
-        }},
-        "message": "Project created successfully"
+            "name": project.name if hasattr(project, 'name') else "Unknown"
+        }}
     }}
 except Exception as e:
-    error_str = str(e)
-    tb_str = traceback.format_exc()
-    print("Error creating project: " + error_str)
-    print("Traceback: " + tb_str)
+    print("Error creating project: " + str(e))
     
     result = {{
         "success": False,
-        "error": error_str,
-        "traceback": tb_str
+        "error": str(e)
     }}
 """.format(path.replace("\\", "\\\\"))
         
@@ -1459,60 +1409,23 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
             # Generate the script with extensive error handling and debugging
             script = self.script_generator.generate_project_create_script(params)
             
-            # Add debug logging to the script - even more comprehensive
+            # Use a minimal debug wrapper around the script
             debug_script = f"""
-# Debug logging
+# Minimal debug
 import sys
-import os
-import time
-import traceback
 
-print("DEBUG: Project creation script starting")
-print("DEBUG: Script execution timestamp:", time.strftime("%Y-%m-%d %H:%M:%S"))
-print("DEBUG: Python version:", sys.version)
-print("DEBUG: Working directory:", os.getcwd())
-print("DEBUG: Creating project at:", "{path}")
-print("DEBUG: Path type:", type("{path}").__name__)
+print("MINIMAL DEBUG: Starting script execution")
+print("MINIMAL DEBUG: Python version:", sys.version)
 
-# Wrap the entire script in a try-except for better error reporting
-try:
-    # Original script follows
+# Include the original script directly
 {script}
 
-    # Verify that result variable exists
-    if 'result' not in locals():
-        result = {{"success": False, "error": "Script did not set result variable"}}
-        print("DEBUG: Script did not set result variable, creating default failure result")
-    else:
-        print("DEBUG: Result variable exists:", result)
-        
-    # Add path info to result for verification
-    if result.get('success', False) and 'project' in result:
-        result['project']['requested_path'] = "{path}"
-        print("DEBUG: Added requested_path to result for verification")
-        
-except Exception as e:
-    error_str = str(e)
-    tb_str = traceback.format_exc()
-    print("DEBUG: Exception during script execution:", error_str)
-    print("DEBUG: Traceback:", tb_str)
-    
-    # Create error result
-    result = {{
-        "success": False,
-        "error": error_str,
-        "traceback": tb_str
-    }}
-
-# Additional logging
-print("DEBUG: Script execution completed")
-print("DEBUG: Final result type:", type(result).__name__)
-print("DEBUG: Final result:", result)
+print("MINIMAL DEBUG: Script execution completed")
 """
             
             logger.info("Executing project creation script in CODESYS")
-            # Execute with a reasonable timeout (60 seconds)
-            result = self.script_executor.execute_script(debug_script, timeout=60)
+            # Execute with a shorter timeout (30 seconds)
+            result = self.script_executor.execute_script(debug_script, timeout=30)
             
             logger.info("Script execution result: %s", result)
             

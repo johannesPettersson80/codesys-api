@@ -106,7 +106,7 @@ def get_session_status():
 def create_project(path):
     """Create a new CODESYS project."""
     logger.info(f"Creating new project at {path}...")
-    return call_api('POST', 'project/create', {'path': path}, timeout=600)
+    return call_api('POST', 'project/create', {'path': path}, timeout=30)  # Shorter timeout for quicker testing
 
 
 def stop_session():
