@@ -7,7 +7,7 @@ operations within the CODESYS environment.
 
 Usage:
     This script is meant to be launched by CODESYS.exe with:
-    CODESYS.exe -script PERSISTENT_SESSION.py
+    CODESYS.exe --runscript="PERSISTENT_SESSION.py"
 
 Note:
     This script is written for Python 2.7 compatibility since

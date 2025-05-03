@@ -134,15 +134,17 @@ class CodesysProcessManager:
                         env["PYTHONPATH"] = script_lib_path
                     
                     logger.info("Starting CODESYS with PYTHONPATH: %s", env["PYTHONPATH"])
-                    # Format command with proper quoting as per documentation
-                    runscript_param = f"--runscript=\"{self.script_path}\""
+                    # Use the exact command format that worked in pure_test.bat
+                    # Construct full command with proper quoting
+                    command = f"\"{self.codesys_path}\" --runscript=\"{self.script_path}\""
                     
+                    logger.info("Starting CODESYS with command: %s", command)
                     self.process = subprocess.Popen(
-                        [self.codesys_path, runscript_param],
+                        command,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
                         env=env,
-                        shell=True  # Use shell to handle parameter quoting
+                        shell=True  # Use shell to handle the command as a string
                     )
                 except subprocess.SubprocessError as se:
                     logger.error("SubprocessError starting CODESYS: %s", str(se))

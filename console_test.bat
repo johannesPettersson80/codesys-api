@@ -8,8 +8,8 @@ echo print("Script test running") >> console_test.py
 echo print("Python version:", sys.version) >> console_test.py
 echo print("Arguments:", sys.argv) >> console_test.py
 
-echo Running CODESYS with --noUI to see console output...
-"C:\Program Files\CODESYS 3.5.21.0\CODESYS\Common\CODESYS.exe" --runscript="%CD%\console_test.py" --noUI
+echo Running CODESYS with --noUI and profile to see console output...
+"C:\Program Files\CODESYS 3.5.21.0\CODESYS\Common\CODESYS.exe" --profile="CODESYS V3.5" --runscript="%CD%\console_test.py" --noUI
 
 echo.
 echo If you saw any output above, the script executed.
