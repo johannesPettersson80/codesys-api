@@ -1394,11 +1394,12 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
     def handle_project_create(self, params):
         """Handle project/create endpoint."""
         if "path" not in params:
-            self.send_json_response({
-                "success": False,
-                "error": "Missing required parameter: path"
-            }, 400)
-            return
+            # If path is not provided, use the current directory
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            default_path = os.path.join(script_dir, f"CODESYS_Project_{timestamp}.project")
+            logger.info("No path provided, using default path: %s", default_path)
+            params["path"] = default_path
         
         path = params.get("path", "")
         # Normalize path to use backslashes for Windows

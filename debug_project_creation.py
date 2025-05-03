@@ -241,9 +241,12 @@ def debug_project_creation():
     logger.info("Creating Test Project")
     logger.info(log_separator)
     
-    # Use a unique path in a location that definitely exists on Windows
+    # Use a path relative to the installation folder
+    script_dir = os.path.dirname(os.path.abspath(__file__))
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    project_path = f"C:/Temp/CODESYS_Debug_{timestamp}.project"
+    project_path = os.path.join(script_dir, f"CODESYS_Debug_{timestamp}.project")
+    # Convert to forward slashes for the API
+    project_path = project_path.replace("\\", "/")
     
     logger.info(f"Creating test project at: {project_path}")
     

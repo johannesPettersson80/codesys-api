@@ -190,8 +190,12 @@ def example_workflow():
         return False
         
     # Step 3: Create a new project
-    # Use a path in a location that definitely exists on Windows
-    project_path = "C:/Temp/CODESYS_Test_Project.project"
+    # Use a path relative to the installation folder
+    import os
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_path = os.path.join(script_dir, "CODESYS_Test_Project.project")
+    # Convert to forward slashes for the API
+    project_path = project_path.replace("\\", "/")
     logger.info("Creating new project at %s...", project_path)
     
     # Try to create project with retries in case of temporary issues
