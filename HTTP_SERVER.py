@@ -674,12 +674,12 @@ try:
     print("Creating new project")
     # Use the global projects instance
     print("Using global scriptengine.projects instance")
-    # Create new project using the global projects instance
-    project = scriptengine.projects.create()
+    # Create project directly with the path parameter
+    print("Creating project with path: {0}")
+    # Pass the path to the create method
+    project = scriptengine.projects.create("{0}")
     
-    print("Saving project to: {0}")
-    # Save to specified path
-    project.save_as("{0}")
+    print("Project created, no need to save separately")
     
     print("Setting as active project")
     # Store as active project
