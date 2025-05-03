@@ -390,12 +390,7 @@ class ScriptExecutor:
                         logger.error("Error reading result file: %s", str(e))
                         # Try again next iteration
                 
-                # Check if process has exited unexpectedly
-                if self.process_manager.process is not None and not self.process_manager.is_running():
-                    logger.warning("CODESYS process exited unexpectedly during script execution")
-                    # Try to restart CODESYS
-                    if not self.process_manager.start():
-                        logger.error("Failed to restart CODESYS after unexpected exit")
+                # This code should not reference process_manager since it doesn't exist in ScriptExecutor
                 
                 # Periodic status logging
                 current_time = time.time()
