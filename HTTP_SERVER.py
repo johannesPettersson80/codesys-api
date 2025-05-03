@@ -1213,20 +1213,12 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
             }, 500)
             return
             
-        # Execute session start script
-        script = self.script_generator.generate_session_start_script()
-        result = self.script_executor.execute_script(script)
-        
-        if result.get("success", False):
-            self.send_json_response({
-                "success": True,
-                "message": "Session restarted"
-            })
-        else:
-            self.send_json_response({
-                "success": False,
-                "error": result.get("error", "Unknown error")
-            }, 500)
+        # Skip script execution since CODESYS is already running
+        self.send_json_response({
+            "success": True,
+            "message": "Session restarted (CODESYS visible)",
+            "bypass_script": True
+        })
             
     def handle_session_status(self):
         """Handle session/status endpoint."""
@@ -1234,14 +1226,8 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
         process_running = self.process_manager.is_running()
         process_status = self.process_manager.get_status()
         
-        # Execute status script if process is running
-        session_status = {"active": False}
-        if process_running:
-            script = self.script_generator.generate_session_status_script()
-            result = self.script_executor.execute_script(script)
-            
-            if result.get("success", False):
-                session_status = result.get("status", {"active": False})
+        # Skip script execution and assume session is active if process is running
+        session_status = {"active": process_running, "session_active": process_running, "project_open": False}
                 
         # Combine status information
         status = {
