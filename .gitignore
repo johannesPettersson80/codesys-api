@@ -1,0 +1,56 @@
+# Python bytecode files
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Log files
+*.log
+logs/
+
+# API keys and configuration
+api_keys.json
+
+# Temporary directories
+requests/
+results/
+
+# Session status file
+session_status.json
+
+# Termination signal file
+terminate.signal
+
+# Temp files
+temp/
+tmp/
+*.tmp
+*.bak
+*.swp
+
+# Windows service-related
+*.exe
+*.dll
+*.pyd
+*.so
+*.dylib
+
+# IDE files
+.idea/
+.vscode/
+*.sublime-*
+
+# OS specific files
+.DS_Store
+Thumbs.db
+**/.claude/settings.local.json
