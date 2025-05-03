@@ -53,10 +53,29 @@ TERMINATION_SIGNAL_FILE = os.path.join(SCRIPT_DIR, "terminate.signal")
 STATUS_FILE = os.path.join(SCRIPT_DIR, "session_status.json")
 LOG_FILE = os.path.join(SCRIPT_DIR, "session.log")
 
-# Ensure directories exist
-for directory in [REQUEST_DIR, RESULT_DIR]:
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+# Ensure directories exist with proper permissions
+def ensure_directory(path):
+    """Ensure directory exists with proper permissions."""
+    if not os.path.exists(path):
+        try:
+            os.makedirs(path)
+            logger.info("Created directory: %s", path)
+        except Exception as e:
+            logger.error("Error creating directory %s: %s", path, str(e))
+            raise
+    
+    # Check if directory is writable
+    if not os.access(path, os.W_OK):
+        logger.error("Directory %s is not writable", path)
+        raise PermissionError("Directory {} is not writable".format(path))
+    
+    return path
+
+# Create necessary directories
+ensure_directory(REQUEST_DIR)
+ensure_directory(RESULT_DIR)
+temp_dir = tempfile.gettempdir()
+ensure_directory(temp_dir)
 
 class CodesysProcessManager:
     """Manages the CODESYS process."""
@@ -69,40 +88,95 @@ class CodesysProcessManager:
         self.lock = threading.Lock()
         
     def start(self):
-        """Start the CODESYS process."""
+        """Start the CODESYS process.
+        
+        Returns:
+            bool: True if process started successfully, False otherwise
+        """
         with self.lock:
             try:
+                # Check if CODESYS is already running
                 if self.is_running():
                     logger.info("CODESYS process already running")
                     return True
+                
+                # Verify CODESYS executable exists
+                if not os.path.exists(self.codesys_path):
+                    logger.error("CODESYS executable not found at path: %s", self.codesys_path)
+                    return False
+                
+                # Verify script exists
+                if not os.path.exists(self.script_path):
+                    logger.error("CODESYS script not found at path: %s", self.script_path)
+                    return False
                     
-                logger.info("Starting CODESYS process")
+                logger.info("Starting CODESYS process with script: %s", self.script_path)
+                
+                # Clear any existing termination signal
+                if os.path.exists(TERMINATION_SIGNAL_FILE):
+                    os.remove(TERMINATION_SIGNAL_FILE)
+                
+                # Create logs directory if needed
+                log_dir = os.path.dirname(LOG_FILE)
+                if log_dir and not os.path.exists(log_dir):
+                    os.makedirs(log_dir)
                 
                 # Start CODESYS with script
-                self.process = subprocess.Popen(
-                    [self.codesys_path, "-script", self.script_path],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-                )
+                try:
+                    self.process = subprocess.Popen(
+                        [self.codesys_path, "-script", self.script_path],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                except subprocess.SubprocessError as se:
+                    logger.error("SubprocessError starting CODESYS: %s", str(se))
+                    return False
+                except FileNotFoundError:
+                    logger.error("CODESYS executable not found. Check the path: %s", self.codesys_path)
+                    return False
                 
-                # Wait for process to initialize
-                time.sleep(5)
+                # Wait for process to initialize (progressive wait)
+                max_wait = 30  # seconds
+                wait_interval = 1
+                total_waited = 0
                 
-                # Check if process is still running
+                while total_waited < max_wait:
+                    time.sleep(wait_interval)
+                    total_waited += wait_interval
+                    
+                    # Check if process is still running
+                    if not self.is_running():
+                        try:
+                            stdout, stderr = self.process.communicate(timeout=1)
+                            stderr_text = stderr.decode('utf-8', errors='replace') if stderr else "No error output"
+                            stdout_text = stdout.decode('utf-8', errors='replace') if stdout else "No standard output"
+                            logger.error("CODESYS process failed to start:\nStderr: %s\nStdout: %s", stderr_text, stdout_text)
+                        except Exception as e:
+                            logger.error("Error communicating with failed process: %s", str(e))
+                        return False
+                    
+                    # Check if status file exists, indicating CODESYS has started
+                    if os.path.exists(STATUS_FILE):
+                        break
+                
+                # Final check if the process is running
                 if not self.is_running():
-                    stdout, stderr = self.process.communicate()
-                    logger.error("CODESYS process failed to start: %s", stderr)
+                    logger.error("CODESYS process failed to initialize properly")
                     return False
                     
                 self.running = True
-                logger.info("CODESYS process started")
+                logger.info("CODESYS process started successfully")
                 return True
             except Exception as e:
                 logger.error("Error starting CODESYS process: %s", str(e))
                 return False
                 
     def stop(self):
-        """Stop the CODESYS process."""
+        """Stop the CODESYS process.
+        
+        Returns:
+            bool: True if process stopped successfully or was not running, False otherwise
+        """
         with self.lock:
             if not self.is_running():
                 logger.info("CODESYS process not running")
@@ -111,27 +185,58 @@ class CodesysProcessManager:
             try:
                 logger.info("Stopping CODESYS process")
                 
-                # Signal termination
-                with open(TERMINATION_SIGNAL_FILE, 'w') as f:
-                    f.write("TERMINATE")
+                # Signal termination through file
+                try:
+                    with open(TERMINATION_SIGNAL_FILE, 'w') as f:
+                        f.write("TERMINATE")
+                    logger.debug("Created termination signal file")
+                except Exception as e:
+                    logger.warning("Could not create termination signal file: %s", str(e))
+                    # Continue with process termination anyway
                     
-                # Wait for process to terminate
-                for _ in range(20):
+                # Wait for process to terminate gracefully
+                max_wait = 10  # seconds
+                wait_interval = 0.5
+                waited = 0
+                
+                while waited < max_wait:
                     if not self.is_running():
                         break
-                    time.sleep(0.5)
-                    
+                    time.sleep(wait_interval)
+                    waited += wait_interval
+                
                 # Force termination if still running
                 if self.is_running():
-                    self.process.terminate()
+                    logger.info("Process still running after %s seconds, sending TERMINATE signal", waited)
+                    try:
+                        self.process.terminate()
+                    except Exception as e:
+                        logger.warning("Error terminating process: %s", str(e))
+                        
+                    # Wait again for termination
                     time.sleep(2)
                     
+                    # Kill if still running
                     if self.is_running():
-                        self.process.kill()
-                        
+                        logger.warning("Process still running after TERMINATE signal, sending KILL signal")
+                        try:
+                            self.process.kill()
+                        except Exception as e:
+                            logger.error("Error killing process: %s", str(e))
+                            return False
+                
+                # Clean up
                 self.process = None
                 self.running = False
-                logger.info("CODESYS process stopped")
+                
+                # Remove termination signal file if it exists
+                if os.path.exists(TERMINATION_SIGNAL_FILE):
+                    try:
+                        os.remove(TERMINATION_SIGNAL_FILE)
+                    except Exception as e:
+                        logger.warning("Could not remove termination signal file: %s", str(e))
+                
+                logger.info("CODESYS process stopped successfully")
                 return True
             except Exception as e:
                 logger.error("Error stopping CODESYS process: %s", str(e))
@@ -164,62 +269,134 @@ class ScriptExecutor:
         self.request_dir = request_dir
         self.result_dir = result_dir
         
-    def execute_script(self, script_content, timeout=30):
-        """Execute a script and return the result."""
+    def execute_script(self, script_content, timeout=120):
+        """Execute a script and return the result.
+        
+        Args:
+            script_content (str): The script content to execute
+            timeout (int): Timeout in seconds (default: 120)
+            
+        Returns:
+            dict: The result of the script execution
+        """
+        request_id = str(uuid.uuid4())
+        script_path = None
+        result_path = None
+        request_path = None
+        
         try:
-            # Create unique ID for this request
-            request_id = str(uuid.uuid4())
+            # Log script execution start
+            logger.info("Executing script (request ID: %s, timeout: %s seconds)", request_id, timeout)
+            logger.debug("Script content: %s", script_content[:200] + ('...' if len(script_content) > 200 else ''))
             
             # Create temporary script file
             script_path = os.path.join(tempfile.gettempdir(), "codesys_script_{0}.py".format(request_id))
-            with open(script_path, 'w') as f:
-                f.write(script_content)
+            try:
+                with open(script_path, 'w') as f:
+                    f.write(script_content)
+                logger.debug("Created script file: %s", script_path)
+            except Exception as e:
+                logger.error("Failed to write script file: %s", str(e))
+                return {"success": False, "error": "Failed to write script file: " + str(e)}
                 
             # Create result file path
             result_path = os.path.join(tempfile.gettempdir(), "codesys_result_{0}.json".format(request_id))
             
             # Create request file
             request_path = os.path.join(self.request_dir, "{0}.request".format(request_id))
-            with open(request_path, 'w') as f:
-                f.write(json.dumps({
-                    "script_path": script_path,
-                    "result_path": result_path,
-                    "timestamp": time.time()
-                }))
+            try:
+                with open(request_path, 'w') as f:
+                    f.write(json.dumps({
+                        "script_path": script_path,
+                        "result_path": result_path,
+                        "timestamp": time.time()
+                    }))
+                logger.debug("Created request file: %s", request_path)
+            except Exception as e:
+                logger.error("Failed to write request file: %s", str(e))
+                return {"success": False, "error": "Failed to write request file: " + str(e)}
                 
             # Wait for result
+            logger.info("Waiting for script execution to complete (max: %s seconds)...", timeout)
             start_time = time.time()
+            check_count = 0
+            last_log_time = start_time
+            
             while time.time() - start_time < timeout:
+                check_count += 1
+                
+                # Check for result file
                 if os.path.exists(result_path):
+                    # Log result found
+                    elapsed = time.time() - start_time
+                    logger.info("Result file found after %.2f seconds (%d checks)", elapsed, check_count)
+                    
                     # Read result
-                    with open(result_path, 'r') as f:
-                        try:
-                            result = json.loads(f.read())
-                            
-                            # Cleanup files
-                            self._cleanup_files(script_path, result_path, request_path)
-                            
-                            return result
-                        except:
-                            pass
+                    try:
+                        with open(result_path, 'r') as f:
+                            content = f.read()
+                            try:
+                                result = json.loads(content)
+                                
+                                # Log result summary
+                                if result.get('success', False):
+                                    logger.info("Script execution successful")
+                                else:
+                                    error = result.get('error', 'Unknown error')
+                                    logger.warning("Script execution failed: %s", error)
+                                
+                                # Cleanup files
+                                self._cleanup_files(script_path, result_path, request_path)
+                                
+                                return result
+                            except json.JSONDecodeError as je:
+                                logger.error("Invalid JSON in result file: %s", str(je))
+                                logger.debug("Result file content: %s", content)
+                                
+                                # Try again next iteration, it might be partially written
+                                pass
+                    except Exception as e:
+                        logger.error("Error reading result file: %s", str(e))
+                        # Try again next iteration
+                
+                # Periodic status logging
+                current_time = time.time()
+                if current_time - last_log_time > 10:  # Log every 10 seconds
+                    logger.info("Still waiting for script execution (elapsed: %.2f seconds)", current_time - start_time)
+                    last_log_time = current_time
                             
                 time.sleep(0.1)
                 
             # Timeout
+            elapsed = time.time() - start_time
+            logger.error("Script execution timed out after %.2f seconds (%d checks)", elapsed, check_count)
             self._cleanup_files(script_path, result_path, request_path)
-            return {"success": False, "error": "Script execution timed out"}
+            return {"success": False, "error": "Script execution timed out after {} seconds".format(timeout)}
         except Exception as e:
-            logger.error("Error executing script: %s", str(e))
+            logger.error("Error executing script (request ID: %s): %s", request_id, str(e))
+            # Attempt to clean up files
+            if script_path or result_path or request_path:
+                self._cleanup_files(script_path, result_path, request_path)
             return {"success": False, "error": str(e)}
             
     def _cleanup_files(self, script_path, result_path, request_path):
-        """Clean up temporary files."""
+        """Clean up temporary files.
+        
+        Args:
+            script_path (str): Path to the script file
+            result_path (str): Path to the result file
+            request_path (str): Path to the request file
+        """
         for path in [script_path, result_path, request_path]:
+            if not path:
+                continue
+                
             try:
                 if os.path.exists(path):
                     os.remove(path)
-            except:
-                pass
+                    logger.debug("Removed temporary file: %s", path)
+            except Exception as e:
+                logger.warning("Failed to remove temporary file %s: %s", path, str(e))
 
 
 class ScriptGenerator:
