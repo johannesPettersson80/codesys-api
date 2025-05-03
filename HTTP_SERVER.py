@@ -9,8 +9,8 @@ It provides RESTful endpoints to interact with CODESYS through
 a persistent session.
 
 Note: This script requires Python 3.x.
-The PERSISTENT_SESSION.py script uses Python 2.7 syntax for
-CODESYS IronPython 2.7 compatibility.
+Only the PERSISTENT_SESSION.py script maintains compatibility with
+CODESYS IronPython environment.
 """
 
 import sys

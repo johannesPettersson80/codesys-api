@@ -7,8 +7,7 @@ This document provides detailed instructions for installing and setting up the C
 - Windows Operating System (Windows 10 or Windows Server 2016+)
 - CODESYS 3.5 or later installed
 - Python 3.x installed
-  - Note: Only the script that runs inside CODESYS maintains Python 2.7 compatibility
-  - All other server and client code requires Python 3.x
+  - Note: Only the PERSISTENT_SESSION.py script maintains compatibility with CODESYS IronPython environment
 - Administrator privileges on the target system
 
 ## Required Python packages
@@ -223,8 +222,8 @@ Rate limiting is not implemented by default. Consider using a reverse proxy like
 
 This API wrapper requires Python 3.x for all components except the script that runs inside CODESYS:
 
-1. **CODESYS Internal Scripts**: The `PERSISTENT_SESSION.py` script maintains Python 2.7 compatibility to match CODESYS's IronPython 2.7 environment.
+1. **CODESYS Internal Scripts**: The `PERSISTENT_SESSION.py` script maintains compatibility with the CODESYS IronPython environment.
 2. **Server Components**: All server components (HTTP server, Windows service) require Python 3.x.
 3. **Client Components**: All client components require Python 3.x.
 
-The project initially supported both Python 2.7 and 3.x, but has been consolidated to only support Python 3.x for simplicity and better maintainability.
+The project has been consolidated to only support Python 3.x for simplicity and better maintainability.

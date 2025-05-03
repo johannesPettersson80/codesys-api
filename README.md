@@ -26,8 +26,7 @@ A persistent RESTful API wrapper for CODESYS automation software, allowing for s
 
 - Windows OS with CODESYS 3.5 or later installed
 - Python 3.x installed
-  - Note: Only the script that runs inside CODESYS maintains Python 2.7 compatibility
-  - All other server and client code requires Python 3.x
+  - Note: Only the PERSISTENT_SESSION.py script maintains compatibility with CODESYS IronPython environment
 - Administrator privileges (for service installation)
 
 ### Installation
