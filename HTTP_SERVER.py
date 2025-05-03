@@ -117,6 +117,14 @@ class CodesysProcessManager:
                 if os.path.exists(TERMINATION_SIGNAL_FILE):
                     os.remove(TERMINATION_SIGNAL_FILE)
                 
+                # Delete any existing status file to ensure we don't detect an old one
+                if os.path.exists(STATUS_FILE):
+                    try:
+                        os.remove(STATUS_FILE)
+                        logger.info("Removed existing status file")
+                    except Exception as e:
+                        logger.warning("Could not remove existing status file: %s", str(e))
+                
                 # Create logs directory if needed
                 log_dir = os.path.dirname(LOG_FILE)
                 if log_dir and not os.path.exists(log_dir):
@@ -154,7 +162,8 @@ class CodesysProcessManager:
                     logger.error("CODESYS executable not found. Check the path: %s", self.codesys_path)
                     return False
                 
-                # Wait for process to initialize (progressive wait)
+                # Wait for process to be visibly running
+                logger.info("Waiting for CODESYS process to start...")
                 max_wait = 30  # seconds
                 wait_interval = 1
                 total_waited = 0
@@ -174,9 +183,21 @@ class CodesysProcessManager:
                             logger.error("Error communicating with failed process: %s", str(e))
                         return False
                     
-                    # Check if status file exists, indicating CODESYS has started
+                    # Check if status file exists, indicating the script has started
                     if os.path.exists(STATUS_FILE):
+                        logger.info("Status file detected after %.1f seconds", total_waited)
                         break
+                    
+                    logger.debug("Waiting for CODESYS initialization... (%.1f seconds elapsed)", total_waited)
+                
+                # Now wait for CODESYS to fully initialize
+                # Even if status file exists, we want to wait a bit longer for full initialization
+                logger.info("CODESYS process has started. Waiting for full initialization...")
+                
+                # Additional wait to ensure CODESYS is fully initialized
+                additional_wait = 10  # seconds
+                logger.info("Waiting additional %d seconds for full initialization...", additional_wait)
+                time.sleep(additional_wait)
                 
                 # Final check if the process is running
                 if not self.is_running():
@@ -197,7 +218,7 @@ class CodesysProcessManager:
                         logger.error("Error creating default status file: %s", str(e))
                     
                 self.running = True
-                logger.info("CODESYS process started successfully")
+                logger.info("CODESYS process started and fully initialized")
                 return True
             except Exception as e:
                 logger.error("Error starting CODESYS process: %s", str(e))
@@ -1417,7 +1438,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
         path = path.replace("/", "\\")
         logger.info("Project creation request for path: %s (executing script in CODESYS)", path)
         
-        # Make sure CODESYS is running
+        # Make sure CODESYS is running and fully initialized
         if not self.process_manager.is_running():
             logger.warning("CODESYS not running, attempting to start it")
             if not self.process_manager.start():
@@ -1428,8 +1449,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                     "error": error_msg
                 }, 500)
                 return
-            # Wait a moment for CODESYS to initialize
-            time.sleep(2)
+            # The start method now includes a wait for full initialization
         
         # Generate the script (IronPython 2.7 compatible)
         script = self.script_generator.generate_project_create_script(params)
