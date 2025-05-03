@@ -22,6 +22,10 @@ import json
 import traceback
 import threading
 
+# Check Python version - CODESYS uses IronPython 2.7
+PYTHON_VERSION = sys.version_info[0]
+IRONPYTHON = 'Iron' in sys.version
+
 # Constants
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REQUEST_DIR = os.path.join(SCRIPT_DIR, "requests")
