@@ -1178,43 +1178,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 "bypass_script": True
             })
             
-            # The code below is commented out - we're no longer waiting for script execution
-            # logger.info("Generating session start script")
-            # script = self.script_generator.generate_session_start_script()
-            # 
-            # logger.info("Executing session start script")
-            # result = self.script_executor.execute_script(script, timeout=300)  # Longer timeout for initial session
-                
-                # Debug session start result
-                logger.info("Session start script execution completed")
-                logger.debug("Session start result: %s", str(result))
-                
-                if result.get("success", False):
-                    logger.info("Session started successfully")
-                    self.send_json_response({
-                        "success": True,
-                        "message": "Session started"
-                    })
-                else:
-                    error_msg = result.get("error", "Unknown error")
-                    logger.error("Error starting session: %s", error_msg)
-                    
-                    # Check for common errors
-                    if "timed out" in error_msg:
-                        logger.error("Session start timed out - check CODESYS installation and configuration")
-                    elif "not found" in error_msg and "CODESYS" in error_msg:
-                        logger.error("CODESYS executable not found - check CODESYS_PATH")
-                    
-                    self.send_json_response({
-                        "success": False,
-                        "error": error_msg
-                    }, 500)
-            except Exception as script_error:
-                logger.error("Error executing session start script: %s", str(script_error), exc_info=True)
-                self.send_json_response({
-                    "success": False,
-                    "error": f"Script execution error: {str(script_error)}"
-                }, 500)
+            # Remove all the commented out code that was causing indentation errors
                 
         except Exception as e:
             logger.error("Unhandled error in session start: %s", str(e), exc_info=True)
