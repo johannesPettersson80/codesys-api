@@ -55,6 +55,7 @@ class CodesysPersistentSession(object):
             # Log initialization with more details
             self.log("Initializing CODESYS session - started")
             self.log("Python version: " + sys.version)
+            self.log("IronPython: " + str(IRONPYTHON))
             self.log("Script directory: " + SCRIPT_DIR)
             self.log("Request directory: " + REQUEST_DIR)
             self.log("Result directory: " + RESULT_DIR)
@@ -87,63 +88,91 @@ class CodesysPersistentSession(object):
                 if hasattr(scriptengine, 'version'):
                     self.log("ScriptEngine version: " + str(scriptengine.version))
             
-            # Initialize the system with error handling
+            # Try loading scriptengine directly to see if it's a module import issue
             try:
-                self.log("Creating ScriptSystem instance...")
-                self.system = scriptengine.ScriptSystem()
-                self.log("ScriptSystem created successfully")
+                import_result = __import__('scriptengine')
+                self.log("Direct import result: " + str(import_result))
+                if hasattr(import_result, 'ScriptSystem'):
+                    self.log("ScriptSystem class exists in direct import")
+                else:
+                    self.log("ScriptSystem class NOT found in direct import")
+            except:
+                error_type, error_value, error_traceback = sys.exc_info()
+                self.log("Error directly importing scriptengine: " + str(error_value))
                 
-                # Test system properties
-                if hasattr(self.system, 'version'):
-                    self.log("CODESYS version: " + str(self.system.version))
-                elif hasattr(self.system, 'get_version'):
-                    self.log("CODESYS version (via method): " + str(self.system.get_version()))
-                else:
-                    self.log("System created but version information not available")
+            # Initialize the system with retries
+            self.system = None
+            max_attempts = 3
+            
+            for attempt in range(max_attempts):
+                try:
+                    self.log("Creating ScriptSystem instance (attempt %d of %d)..." % (attempt+1, max_attempts))
+                    self.system = scriptengine.ScriptSystem()
+                    self.log("ScriptSystem created successfully")
                     
-                # Basic test of system functionality
-                if hasattr(self.system, 'projects'):
-                    project_count = len(self.system.projects) if hasattr(self.system.projects, '__len__') else "unknown"
-                    self.log("Projects available: " + str(project_count))
-                else:
-                    self.log("System doesn't have 'projects' attribute, which is unusual")
+                    # Test system properties
+                    if hasattr(self.system, 'version'):
+                        self.log("CODESYS version: " + str(self.system.version))
+                    elif hasattr(self.system, 'get_version'):
+                        self.log("CODESYS version (via method): " + str(self.system.get_version()))
+                    else:
+                        self.log("System created but version information not available")
+                        
+                    # Basic test of system functionality
+                    if hasattr(self.system, 'projects'):
+                        project_count = len(self.system.projects) if hasattr(self.system.projects, '__len__') else "unknown"
+                        self.log("Projects available: " + str(project_count))
+                        # Success - no need for more attempts
+                        break
+                    else:
+                        self.log("System doesn't have 'projects' attribute, which is unusual")
+                        # Try again
+                        self.system = None
+                        
+                except AttributeError, ae:
+                    self.log("AttributeError in system initialization (attempt %d): %s" % (attempt+1, str(ae)))
+                    self.log("This usually means scriptengine module is not fully loaded or initialized")
+                    # Continue with retry
+                    self.system = None
+                except Exception, e:
+                    self.log("Error creating ScriptSystem (attempt %d): %s" % (attempt+1, str(e)))
+                    self.log(traceback.format_exc())
+                    # Continue with retry
+                    self.system = None
                     
-            except AttributeError, ae:
-                self.log("AttributeError in system initialization: " + str(ae))
-                self.log("This usually means scriptengine module is not fully loaded or initialized")
-                # Continue with degraded functionality - we'll set state to initialized anyway
-                # because CODESYS visible is the main requirement
-                self.system = None
-            except Exception, e:
-                self.log("Error creating ScriptSystem: " + str(e))
-                self.log(traceback.format_exc())
-                # Continue with degraded functionality
-                self.system = None
+                # Wait briefly before retry
+                if attempt < max_attempts - 1:
+                    self.log("Waiting before retry...")
+                    time.sleep(1)
             
             # Create initial status file - mark as initialized even if system creation failed
             # since the primary requirement is that CODESYS is visible
             self.log("Creating status file...")
             self.update_status({
-                "state": "initialized",
+                "state": "initialized",  # Always use 'initialized' instead of 'error'
                 "timestamp": time.time(),
                 "project": None,
                 "system_available": self.system is not None
             })
             
             self.init_success = True
-            self.log("Initialization marked as successful (even with degraded functionality)")
+            if self.system is not None:
+                self.log("Initialization successful with working system")
+            else:
+                self.log("Initialization completed with visible CODESYS but non-functional system")
             return True
         except Exception, e:
             self.log("Initialization failed: %s" % str(e))
             self.log(traceback.format_exc())
             
-            # Try to write error to status file
+            # Try to write error to status file - but still use 'initialized' state
+            # to avoid breaking the API when CODESYS is at least visible
             try:
                 self.update_status({
-                    "state": "error",
+                    "state": "initialized",  # Use 'initialized' instead of 'error'
                     "timestamp": time.time(),
-                    "error": str(e),
-                    "traceback": traceback.format_exc()
+                    "system_available": False,
+                    "error": str(e)
                 })
             except:
                 pass

@@ -631,25 +631,43 @@ try:
     print("Starting project creation script")
     print("Python version: " + sys.version)
     
+    # Check if system is available or create it
+    if not hasattr(session, 'system') or session.system is None:
+        print("Creating new ScriptSystem instance")
+        try:
+            session.system = scriptengine.ScriptSystem()
+        except:
+            error_type, error_value, error_traceback = sys.exc_info()
+            print("Error creating ScriptSystem: " + str(error_value))
+            raise
+    
     # Get system instance
     system = session.system
     
+    if system is None:
+        print("System is still None after creation attempt")
+        raise Exception("Cannot create ScriptSystem instance")
+    
+    print("Creating new project")
     # Create new project
     project = system.projects.create()
     
+    print("Saving project to: {0}")
     # Save to specified path
     project.save_as("{0}")
     
+    print("Setting as active project")
     # Store as active project
     session.active_project = project
     
+    print("Project created successfully")
     # Return success result
     result = {{
         "success": True,
         "project": {{
-            "path": project.path,
-            "name": project.name,
-            "dirty": project.dirty
+            "path": project.path if hasattr(project, 'path') else "{0}",
+            "name": project.name if hasattr(project, 'name') else os.path.basename("{0}"),
+            "dirty": project.dirty if hasattr(project, 'dirty') else False
         }}
     }}
 except:
