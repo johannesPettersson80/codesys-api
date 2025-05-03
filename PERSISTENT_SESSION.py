@@ -55,6 +55,17 @@ class CodesysPersistentSession(object):
             self.log("Request directory: " + REQUEST_DIR)
             self.log("Result directory: " + RESULT_DIR)
             
+            # Write early status file to indicate script has started
+            try:
+                with open(STATUS_FILE, 'w') as f:
+                    f.write(json.dumps({
+                        "state": "starting",
+                        "timestamp": time.time()
+                    }))
+                self.log("Created early status file")
+            except Exception, e:
+                self.log("Warning: Could not create early status file: " + str(e))
+            
             # Check if directories exist and are accessible
             for directory in [REQUEST_DIR, RESULT_DIR]:
                 if not os.path.exists(directory):

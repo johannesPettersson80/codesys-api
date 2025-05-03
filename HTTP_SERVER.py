@@ -269,12 +269,12 @@ class ScriptExecutor:
         self.request_dir = request_dir
         self.result_dir = result_dir
         
-    def execute_script(self, script_content, timeout=120):
+    def execute_script(self, script_content, timeout=300):
         """Execute a script and return the result.
         
         Args:
             script_content (str): The script content to execute
-            timeout (int): Timeout in seconds (default: 120)
+            timeout (int): Timeout in seconds (default: 300)
             
         Returns:
             dict: The result of the script execution
@@ -1100,7 +1100,7 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 script = self.script_generator.generate_session_start_script()
                 
                 logger.info("Executing session start script")
-                result = self.script_executor.execute_script(script, timeout=180)  # Longer timeout for initial session
+                result = self.script_executor.execute_script(script, timeout=300)  # Longer timeout for initial session
                 
                 # Debug session start result
                 logger.info("Session start script execution completed")
