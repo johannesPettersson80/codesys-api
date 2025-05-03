@@ -621,29 +621,44 @@ except Exception as e:
         return """
 import scriptengine
 import json
+import os
 
 try:
-    # Minimal script for project creation
-    print("Starting minimal project creation script")
+    # Minimal script for project creation with directory check
+    print("Starting project creation script")
+    
+    # Make sure the target directory exists
+    target_dir = os.path.dirname("{0}")
+    print("Checking target directory: " + target_dir)
+    
+    if not os.path.exists(target_dir):
+        print("Creating directory: " + target_dir)
+        os.makedirs(target_dir)
+        print("Directory created successfully")
     
     # Get system instance
+    print("Getting system instance")
     system = session.system
     
     # Create new project
+    print("Creating new project")
     project = system.projects.create()
     
     # Save to specified path
+    print("Saving project to: {0}")
     project.save_as("{0}")
+    print("Project saved successfully")
     
     # Store as active project
     session.active_project = project
     
-    # Return simple success result
+    # Return success result
     result = {{
         "success": True,
         "project": {{
             "path": project.path if hasattr(project, 'path') else "Unknown",
-            "name": project.name if hasattr(project, 'name') else "Unknown"
+            "name": project.name if hasattr(project, 'name') else "Unknown",
+            "directory_created": not os.path.exists(target_dir)
         }}
     }}
 except Exception as e:

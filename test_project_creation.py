@@ -140,9 +140,9 @@ def test_project_creation():
     logger.info("CODESYS process is running, proceeding with project creation test")
     
     # Step 3: Create a test project
-    # Use a unique path for this test to avoid conflicts
+    # Use a unique path in a location that definitely exists on Windows
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    project_path = f"C:/Users/Public/Documents/CODESYS_Test_{timestamp}.project"
+    project_path = f"C:/Temp/CODESYS_Test_{timestamp}.project"
     
     logger.info(f"Creating test project at: {project_path}")
     

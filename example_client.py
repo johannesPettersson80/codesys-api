@@ -190,8 +190,8 @@ def example_workflow():
         return False
         
     # Step 3: Create a new project
-    # Use a path in a location with guaranteed write permissions for testing
-    project_path = "C:/Users/Public/Documents/CODESYS_Test_Project.project"
+    # Use a path in a location that definitely exists on Windows
+    project_path = "C:/Temp/CODESYS_Test_Project.project"
     logger.info("Creating new project at %s...", project_path)
     
     # Try to create project with retries in case of temporary issues
