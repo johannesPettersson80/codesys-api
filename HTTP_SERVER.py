@@ -23,6 +23,7 @@ import tempfile
 import uuid
 import shutil
 import logging
+import traceback
 
 # Python 3 compatibility imports
 try:
