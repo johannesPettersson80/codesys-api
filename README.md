@@ -32,7 +32,7 @@ A persistent RESTful API wrapper for CODESYS automation software, allowing for s
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/codesys-api.git
+   git clone https://github.com/johannesPettersson80/codesys-api.git
    ```
 
 2. Navigate to the project directory:
