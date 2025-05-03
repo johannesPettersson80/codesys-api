@@ -134,11 +134,15 @@ class CodesysProcessManager:
                         env["PYTHONPATH"] = script_lib_path
                     
                     logger.info("Starting CODESYS with PYTHONPATH: %s", env["PYTHONPATH"])
+                    # Format command with proper quoting as per documentation
+                    runscript_param = f"--runscript=\"{self.script_path}\""
+                    
                     self.process = subprocess.Popen(
-                        [self.codesys_path, "--runscript", self.script_path],
+                        [self.codesys_path, runscript_param],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE,
-                        env=env
+                        env=env,
+                        shell=True  # Use shell to handle parameter quoting
                     )
                 except subprocess.SubprocessError as se:
                     logger.error("SubprocessError starting CODESYS: %s", str(se))
