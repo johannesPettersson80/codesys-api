@@ -143,11 +143,22 @@ def run_codesys_with_script():
         if os.path.exists(STATUS_FILE):
             os.remove(STATUS_FILE)
             
+        # Set up environment with PYTHONPATH pointing to ScriptLib
+        script_lib_path = os.path.join(SCRIPT_DIR, "ScriptLib")
+        env = os.environ.copy()
+        if "PYTHONPATH" in env:
+            env["PYTHONPATH"] = script_lib_path + os.pathsep + env["PYTHONPATH"]
+        else:
+            env["PYTHONPATH"] = script_lib_path
+        
+        print(f"Setting PYTHONPATH to: {env['PYTHONPATH']}")
+        
         # Start CODESYS with the script
         process = subprocess.Popen(
             [CODESYS_PATH, "-script", TEST_SCRIPT_PATH],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
+            env=env
         )
         
         print(f"✓ Process started with PID: {process.pid}")

@@ -121,12 +121,24 @@ class CodesysProcessManager:
                 if log_dir and not os.path.exists(log_dir):
                     os.makedirs(log_dir)
                 
-                # Start CODESYS with script
+                # Start CODESYS with script and proper Python path
                 try:
+                    # Get ScriptLib directory path for Python imports
+                    script_lib_path = os.path.join(SCRIPT_DIR, "ScriptLib")
+                    
+                    # Set up environment with PYTHONPATH
+                    env = os.environ.copy()
+                    if "PYTHONPATH" in env:
+                        env["PYTHONPATH"] = script_lib_path + os.pathsep + env["PYTHONPATH"]
+                    else:
+                        env["PYTHONPATH"] = script_lib_path
+                    
+                    logger.info("Starting CODESYS with PYTHONPATH: %s", env["PYTHONPATH"])
                     self.process = subprocess.Popen(
                         [self.codesys_path, "-script", self.script_path],
                         stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE
+                        stderr=subprocess.PIPE,
+                        env=env
                     )
                 except subprocess.SubprocessError as se:
                     logger.error("SubprocessError starting CODESYS: %s", str(se))
