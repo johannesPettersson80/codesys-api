@@ -1496,69 +1496,104 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
             }, 400)
             return
         
-        # Skip script execution and return success immediately
         path = params.get("path", "")
-        logger.info("Project open request for path: %s (bypassing script execution)", path)
+        logger.info("Project open request for path: %s (executing script in CODESYS)", path)
         
-        self.send_json_response({
-            "success": True,
-            "project": {
-                "path": path,
-                "name": os.path.basename(path),
-                "dirty": False
-            },
-            "bypass_script": True
-        })
+        # Generate and execute project open script
+        script = self.script_generator.generate_project_open_script(params)
+        result = self.script_executor.execute_script(script, timeout=30)
+        
+        if result.get("success", False):
+            logger.info("Project opening successful")
+            self.send_json_response(result)
+        else:
+            error_msg = result.get("error", "Unknown error")
+            logger.error("Error opening project: %s", error_msg)
+            self.send_json_response({
+                "success": False,
+                "error": error_msg
+            }, 500)
+        
         
     def handle_project_save(self):
         """Handle project/save endpoint."""
-        # Skip script execution and return success immediately
-        logger.info("Project save request (bypassing script execution)")
+        logger.info("Project save request (executing script in CODESYS)")
         
-        self.send_json_response({
-            "success": True,
-            "message": "Project saved (bypassed)",
-            "bypass_script": True
-        })
+        # Generate and execute project save script
+        script = self.script_generator.generate_project_save_script()
+        result = self.script_executor.execute_script(script, timeout=30)
+        
+        if result.get("success", False):
+            logger.info("Project save successful")
+            self.send_json_response(result)
+        else:
+            error_msg = result.get("error", "Unknown error")
+            logger.error("Error saving project: %s", error_msg)
+            self.send_json_response({
+                "success": False,
+                "error": error_msg
+            }, 500)
+        
         
     def handle_project_close(self):
         """Handle project/close endpoint."""
-        # Skip script execution and return success immediately
-        logger.info("Project close request (bypassing script execution)")
+        logger.info("Project close request (executing script in CODESYS)")
         
-        self.send_json_response({
-            "success": True,
-            "message": "Project closed (bypassed)",
-            "bypass_script": True
-        })
+        # Generate and execute project close script
+        script = self.script_generator.generate_project_close_script()
+        result = self.script_executor.execute_script(script, timeout=30)
+        
+        if result.get("success", False):
+            logger.info("Project close successful")
+            self.send_json_response(result)
+        else:
+            error_msg = result.get("error", "Unknown error")
+            logger.error("Error closing project: %s", error_msg)
+            self.send_json_response({
+                "success": False,
+                "error": error_msg
+            }, 500)
+        
         
     def handle_project_list(self):
         """Handle project/list endpoint."""
-        # Skip script execution and return empty project list
-        logger.info("Project list request (bypassing script execution)")
+        logger.info("Project list request (executing script in CODESYS)")
         
-        self.send_json_response({
-            "success": True,
-            "projects": [],
-            "bypass_script": True
-        })
+        # Generate and execute project list script
+        script = self.script_generator.generate_project_list_script()
+        result = self.script_executor.execute_script(script, timeout=30)
+        
+        if result.get("success", False):
+            logger.info("Project listing successful")
+            self.send_json_response(result)
+        else:
+            error_msg = result.get("error", "Unknown error")
+            logger.error("Error listing projects: %s", error_msg)
+            self.send_json_response({
+                "success": False,
+                "error": error_msg
+            }, 500)
+        
         
     def handle_project_compile(self, params):
         """Handle project/compile endpoint."""
-        # Skip script execution and return success immediately
-        logger.info("Project compile request (bypassing script execution)")
+        logger.info("Project compile request (executing script in CODESYS)")
         
-        clean_build = params.get("clean_build", False)
-        self.send_json_response({
-            "success": True,
-            "compilation": {
-                "duration_seconds": 1.0,
-                "errors": 0,
-                "warnings": 0,
-                "has_errors": False
-            },
-            "bypass_script": True
-        })
+        # Generate and execute project compilation script
+        script = self.script_generator.generate_project_compile_script(params)
+        result = self.script_executor.execute_script(script, timeout=60)  # Compilation can take longer
+        
+        if result.get("success", False):
+            logger.info("Project compilation successful")
+            self.send_json_response(result)
+        else:
+            error_msg = result.get("error", "Unknown error")
+            logger.error("Error compiling project: %s", error_msg)
+            self.send_json_response({
+                "success": False,
+                "error": error_msg
+            }, 500)
+        
         
     def handle_pou_create(self, params):
         """Handle pou/create endpoint."""
@@ -1571,23 +1606,28 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 }, 400)
                 return
                 
-        # Skip script execution and return success immediately
         name = params.get("name", "")
         pou_type = params.get("type", "FunctionBlock")
         language = params.get("language", "ST")
         parent_path = params.get("parentPath", "")
         
-        logger.info("POU create request for '%s' (bypassing script execution)", name)
+        logger.info("POU create request for '%s' (executing script in CODESYS)", name)
         
-        self.send_json_response({
-            "success": True,
-            "pou": {
-                "name": name,
-                "type": pou_type,
-                "language": language
-            },
-            "bypass_script": True
-        })
+        # Generate and execute POU creation script
+        script = self.script_generator.generate_pou_create_script(params)
+        result = self.script_executor.execute_script(script, timeout=30)
+        
+        if result.get("success", False):
+            logger.info("POU creation successful")
+            self.send_json_response(result)
+        else:
+            error_msg = result.get("error", "Unknown error")
+            logger.error("Error creating POU: %s", error_msg)
+            self.send_json_response({
+                "success": False,
+                "error": error_msg
+            }, 500)
+        
         
     def handle_pou_code(self, params):
         """Handle pou/code endpoint."""
@@ -1600,30 +1640,48 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                 }, 400)
                 return
                 
-        # Skip script execution and return success immediately
         path = params.get("path", "")
         code = params.get("code", "")
         
-        logger.info("POU code update request for '%s' (bypassing script execution)", path)
+        logger.info("POU code update request for '%s' (executing script in CODESYS)", path)
         
-        self.send_json_response({
-            "success": True,
-            "message": "POU code updated (bypassed)",
-            "bypass_script": True
-        })
+        # Generate and execute POU code setting script
+        script = self.script_generator.generate_pou_code_script(params)
+        result = self.script_executor.execute_script(script, timeout=30)
+        
+        if result.get("success", False):
+            logger.info("POU code update successful")
+            self.send_json_response(result)
+        else:
+            error_msg = result.get("error", "Unknown error")
+            logger.error("Error updating POU code: %s", error_msg)
+            self.send_json_response({
+                "success": False,
+                "error": error_msg
+            }, 500)
+        
         
     def handle_pou_list(self, params):
         """Handle pou/list endpoint."""
-        # Skip script execution and return empty POU list
         parent_path = params.get("parentPath", "")
         
-        logger.info("POU list request (bypassing script execution)")
+        logger.info("POU list request (executing script in CODESYS)")
         
-        self.send_json_response({
-            "success": True,
-            "pous": [],
-            "bypass_script": True
-        })
+        # Generate and execute POU listing script
+        script = self.script_generator.generate_pou_list_script(params)
+        result = self.script_executor.execute_script(script, timeout=30)
+        
+        if result.get("success", False):
+            logger.info("POU listing successful")
+            self.send_json_response(result)
+        else:
+            error_msg = result.get("error", "Unknown error")
+            logger.error("Error listing POUs: %s", error_msg)
+            self.send_json_response({
+                "success": False,
+                "error": error_msg
+            }, 500)
+        
         
     def handle_script_execute(self, params):
         """Handle script/execute endpoint."""
