@@ -1326,36 +1326,6 @@ except Exception as e:
     result = {{"success": False, "error": str(error_value)}}
 """.format(name, pou_type, parent_path, language)
         
-        # Map language
-        language_map = {{
-            "ST": scriptengine.ImplementationLanguage.ST,
-            "FBD": scriptengine.ImplementationLanguage.FBD,
-            "LD": scriptengine.ImplementationLanguage.LD,
-            "IL": scriptengine.ImplementationLanguage.IL,
-            "CFC": scriptengine.ImplementationLanguage.CFC,
-            "SFC": scriptengine.ImplementationLanguage.SFC
-        }}
-        
-        # Create POU
-        pou = container.create_pou(
-            "{0}",
-            pou_type_map.get("{1}", scriptengine.PouType.FUNCTION_BLOCK),
-            language_map.get("{3}", scriptengine.ImplementationLanguage.ST)
-        )
-        
-        # Return POU info
-        result = {{
-            "success": True,
-            "pou": {{
-                "name": pou.name,
-                "type": "{1}",
-                "language": "{3}"
-            }}
-        }}
-except Exception as e:
-    result = {{"success": False, "error": str(e)}}
-""".format(name, pou_type, parent_path, language)
-        
     def generate_pou_code_script(self, params):
         """Generate script to set POU code."""
         pou_path = params.get("path", "")
