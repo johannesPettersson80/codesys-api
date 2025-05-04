@@ -593,6 +593,10 @@ class ScriptGenerator:
 import scriptengine
 import json
 import sys
+import warnings
+
+# Silence deprecation warnings for sys.exc_clear() in IronPython 2.7
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 try:
     # Use the global system instance provided by scriptengine
@@ -652,6 +656,10 @@ import scriptengine
 import json
 import os
 import sys
+import warnings
+
+# Silence deprecation warnings for sys.exc_clear() in IronPython 2.7
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 try:
     # Simple project creation script

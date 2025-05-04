@@ -21,6 +21,10 @@ import time
 import json
 import traceback
 import threading
+import warnings
+
+# Silence deprecation warnings for sys.exc_clear() in IronPython 2.7
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # Check Python version - CODESYS uses IronPython 2.7
 PYTHON_VERSION = sys.version_info[0]
