@@ -1366,6 +1366,128 @@ import json
 import sys
 import traceback
 
+# Robust object finding function based on working implementation 
+def find_object_by_path_robust(start_node, full_path, target_type_name="object"):
+    print("Finding " + target_type_name + " by path: '" + full_path + "'")
+    normalized_path = full_path.replace('\\\\\\\\', '/').strip('/')
+    path_parts = normalized_path.split('/')
+    if not path_parts:
+        print("ERROR: Path is empty.")
+        return None
+
+    # Determine the actual starting node (project or application)
+    project = start_node  # Assume start_node is project initially
+    if not hasattr(start_node, 'active_application') and hasattr(start_node, 'project'):
+         # If start_node is not project but has project ref (e.g., an application), get the project
+         try: 
+             project = start_node.project
+         except Exception as proj_ref_err:
+             print("WARN: Could not get project reference from start_node: " + str(proj_ref_err))
+             # Proceed assuming start_node might be the project anyway or search fails
+
+    # Try to get the application object robustly if we think we have the project
+    app = None
+    if hasattr(project, 'active_application'):
+        try: 
+            app = project.active_application
+        except Exception: 
+            pass  # Ignore errors getting active app
+        
+        if not app:
+            try:
+                 # Try to find the application by traversing objects
+                 if hasattr(project, 'objects'):
+                     for obj in project.objects:
+                         if hasattr(obj, 'get_name') and obj.get_name() == "Application":
+                             app = obj
+                             break
+            except Exception: 
+                pass
+
+    # Check if the first path part matches the application name
+    app_name_lower = ""
+    if app:
+        try: 
+            app_name_lower = (app.get_name() or "application").lower()
+        except Exception: 
+            app_name_lower = "application"  # Fallback
+
+    # Decide where to start the traversal
+    current_obj = start_node  # Default to the node passed in
+    if hasattr(project, 'active_application'):  # Only adjust if start_node was likely the project
+        if app and path_parts[0].lower() == app_name_lower:
+             print("Path starts with Application name '" + path_parts[0] + "'. Beginning search there.")
+             current_obj = app
+             path_parts = path_parts[1:]  # Consume the app name part
+             # If path was *only* the application name
+             if not path_parts:
+                 print("Target path is the Application object itself.")
+                 return current_obj
+        else:
+            print("Path does not start with Application name. Starting search from project root.")
+            current_obj = project  # Start search from the project root
+    else:
+         print("Starting search from originally provided node.")
+
+    # Traverse the remaining path parts
+    parent_path_str = current_obj.get_name() if hasattr(current_obj, 'get_name') else str(current_obj)
+
+    for i, part_name in enumerate(path_parts):
+        is_last_part = (i == len(path_parts) - 1)
+        print("Searching for part [" + str(i+1) + "/" + str(len(path_parts)) + "]: '" + part_name + "' under '" + parent_path_str + "'")
+        found_in_parent = None
+        
+        try:
+            # Try various methods to find the child object by name
+            if hasattr(current_obj, 'find_object'):
+                try:
+                    found_in_parent = current_obj.find_object(part_name)
+                    if found_in_parent:
+                        print("Found via find_object")
+                except Exception as e:
+                    print("Error with find_object: " + str(e))
+            
+            if not found_in_parent and hasattr(current_obj, 'get_object'):
+                try:
+                    found_in_parent = current_obj.get_object(part_name)
+                    if found_in_parent:
+                        print("Found via get_object")
+                except Exception as e:
+                    print("Error with get_object: " + str(e))
+            
+            if not found_in_parent and hasattr(current_obj, 'objects'):
+                try:
+                    for obj in current_obj.objects:
+                        if hasattr(obj, 'name') and obj.name == part_name:
+                            found_in_parent = obj
+                            print("Found via objects collection")
+                            break
+                        if hasattr(obj, 'get_name') and obj.get_name() == part_name:
+                            found_in_parent = obj
+                            print("Found via get_name method")
+                            break
+                except Exception as e:
+                    print("Error iterating objects: " + str(e))
+            
+            # Update current object if found
+            if found_in_parent:
+                current_obj = found_in_parent
+                parent_path_str = current_obj.get_name() if hasattr(current_obj, 'get_name') else part_name
+                print("Stepped into '" + parent_path_str + "'")
+            else:
+                # If not found at any point, the path is invalid from this parent
+                print("ERROR: Path part '" + part_name + "' not found under '" + parent_path_str + "'")
+                return None  # Path broken
+
+        except Exception as find_err:
+            print("ERROR: Exception while searching for '" + part_name + "' under '" + parent_path_str + "': " + str(find_err))
+            print(traceback.format_exc())
+            return None  # Error during search
+
+    print("Found object: " + (current_obj.get_name() if hasattr(current_obj, 'get_name') else "Unnamed"))
+    return current_obj
+
+
 try:
     print("Starting POU code setting script for {0}")
     
@@ -1378,159 +1500,97 @@ try:
         project = session.active_project
         print("Got active project")
         
-        # Try to get application
-        if not hasattr(project, 'active_application') or project.active_application is None:
-            print("Project has no active application")
-            result = {{"success": False, "error": "Project has no active application"}}
-        else:
-            # Get application
-            application = project.active_application
-            print("Got active application")
+        # Use robust object finding method
+        try:
+            full_path = "{1}"
+            print("Using full POU path: " + full_path)
             
-            # Parse the POU path
-            try:
-                full_path = "{1}"
-                print("Using full POU path: " + full_path)
-                path_parts = full_path.split('/')
-                pou_name = path_parts[-1] if path_parts else ""
-                parent_path = "/".join(path_parts[:-1])
+            # Find the POU using the robust path finder
+            pou = find_object_by_path_robust(project, full_path, "POU")
+            
+            if not pou:
+                print("POU not found using robust path finder: " + full_path)
+                result = {{"success": False, "error": "POU not found: " + full_path}}
+            else:
+                # POU was found
+                pou_name = pou.get_name() if hasattr(pou, 'get_name') else full_path.split('/')[-1]
+                print("Found POU: " + pou_name)
                 
-                print("Looking for POU: " + pou_name)
-                print("In parent path: " + parent_path)
-                
-                # Start navigation at application level
-                current = application
-                
-                # Navigate to parent container if needed
-                if parent_path:
-                    print("Navigating to parent path...")
-                    for part in parent_path.split('/'):
-                        if not part:
-                            continue
-                        print("Navigating to: " + part)
-                        
-                        if hasattr(current, 'find_object'):
-                            current = current.find_object(part)
-                            print("Found via find_object")
-                        elif hasattr(current, 'get_object'):
-                            current = current.get_object(part)
-                            print("Found via get_object")
-                        elif hasattr(current, 'objects'):
-                            try:
-                                # Try to find by iterating objects collection
-                                found = False
-                                for obj in current.objects:
-                                    if hasattr(obj, 'name') and obj.name == part:
-                                        current = obj
-                                        found = True
-                                        print("Found via objects collection")
-                                        break
-                            except Exception as e:
-                                print("Error iterating objects: " + str(e))
-                                found = False
-                            if not found:
-                                raise ValueError("Object not found in collection: " + part)
-                        else:
-                            raise ValueError("Cannot navigate to " + part + ", no suitable method to find objects")
-                
-                # Find POU within the current container
-                pou = None
-                print("Looking for POU '" + pou_name + "' in current container")
-                
-                # Try various methods to find the POU
-                if hasattr(current, 'find_object'):
-                    pou = current.find_object(pou_name)
-                    if pou:
-                        print("Found POU via find_object")
-                elif hasattr(current, 'get_object'):
-                    pou = current.get_object(pou_name)
-                    if pou:
-                        print("Found POU via get_object")
-                
-                # If not found, try to iterate through objects
-                if not pou and hasattr(current, 'objects'):
-                    for obj in current.objects:
-                        if hasattr(obj, 'name') and obj.name == pou_name:
-                            pou = obj
-                            print("Found POU via objects collection")
-                            break
-                
-                # Check if POU was found
-                if not pou:
-                    print("POU not found: " + pou_name)
-                    result = {{"success": False, "error": "POU not found: " + pou_name}}
-                else:
                     # Set implementation code using textual_implementation approach as shown in working example
-                    print("Found POU, setting implementation code")
-                    
-                    # Try to use the working approach from set_pou_code.py
-                    if hasattr(pou, 'textual_implementation'):
-                        impl_obj = pou.textual_implementation
-                        if impl_obj and hasattr(impl_obj, 'replace'):
+                print("Found POU, setting implementation code")
+                
+                # Try to use the working approach from set_pou_code.py
+                if hasattr(pou, 'textual_implementation'):
+                    impl_obj = pou.textual_implementation
+                    if impl_obj and hasattr(impl_obj, 'replace'):
+                        try:
+                            print("Setting implementation using textual_implementation.replace()")
+                            impl_obj.replace("{2}")
+                            print("Updated POU implementation code successfully")
+                            
+                            # Save the project to persist changes
                             try:
-                                print("Setting implementation using textual_implementation.replace()")
-                                impl_obj.replace("{2}")
-                                print("Updated POU implementation code successfully")
-                                
-                                # Save the project to persist changes
-                                try:
-                                    print("Saving project after code change...")
-                                    project.save()
-                                    print("Project saved successfully")
-                                except Exception as save_err:
-                                    print("Warning: Failed to save project after code change: " + str(save_err))
-                                
-                                # Return success
-                                result = {{
-                                    "success": True,
-                                    "message": "POU code updated",
-                                    "pou": {{
-                                        "name": pou.name if hasattr(pou, 'name') else pou_name,
-                                        "path": "{0}"
-                                    }}
+                                print("Saving project after code change...")
+                                project.save()
+                                print("Project saved successfully")
+                            except Exception as save_err:
+                                print("Warning: Failed to save project after code change: " + str(save_err))
+                            
+                            # Return success
+                            result = {{
+                                "success": True,
+                                "message": "POU code updated",
+                                "pou": {{
+                                    "name": pou_name,
+                                    "path": "{0}"
                                 }}
-                            except Exception as impl_err:
-                                print("Error setting implementation: " + str(impl_err))
-                                print(traceback.format_exc())
-                                result = {{
-                                    "success": False,
-                                    "error": "Error setting implementation: " + str(impl_err)
-                                }}
-                        else:
-                            print("textual_implementation exists but lacks replace method")
+                            }}
+                        except Exception as impl_err:
+                            print("Error setting implementation: " + str(impl_err))
+                            print(traceback.format_exc())
                             result = {{
                                 "success": False,
-                                "error": "POU textual_implementation doesn't have replace method"
+                                "error": "Error setting implementation: " + str(impl_err)
                             }}
                     else:
-                        # Fall back to other methods as a last resort
-                        print("POU doesn't have textual_implementation attribute, trying alternatives")
-                        if hasattr(pou, 'set_implementation_code'):
-                            try:
-                                pou.set_implementation_code("{2}")
-                                print("Updated POU implementation via set_implementation_code")
-                                result = {{
-                                    "success": True,
-                                    "message": "POU code updated",
-                                    "pou": {{
-                                        "name": pou.name if hasattr(pou, 'name') else pou_name,
-                                        "path": "{0}"
-                                    }}
-                                }}
-                            except Exception as e:
-                                print("Error using set_implementation_code: " + str(e))
-                                result = {{"success": False, "error": str(e)}}
-                        else:
-                            # No suitable method found
-                            print("No method found to update POU code, object type: " + str(type(pou)))
+                        print("textual_implementation exists but lacks replace method")
+                        result = {{
+                            "success": False,
+                            "error": "POU textual_implementation doesn't have replace method"
+                        }}
+                else:
+                    # Fall back to other methods as a last resort
+                    print("POU doesn't have textual_implementation attribute, trying alternatives")
+                    if hasattr(pou, 'set_implementation_code'):
+                        try:
+                            pou.set_implementation_code("{2}")
+                            print("Updated POU implementation via set_implementation_code")
                             result = {{
-                                "success": False,
-                                "error": "POU found but no method to update its code was found"
+                                "success": True,
+                                "message": "POU code updated",
+                                "pou": {{
+                                    "name": pou_name,
+                                    "path": "{0}"
+                                }}
                             }}
+                        except Exception as e:
+                            print("Error using set_implementation_code: " + str(e))
+                            result = {{"success": False, "error": str(e)}}
+                    else:
+                        # No suitable method found
+                        print("No method found to update POU code, object type: " + str(type(pou)))
+                        result = {{
+                            "success": False,
+                            "error": "POU found but no method to update its code was found"
+                        }}
             except Exception as e:
                 print("Error processing POU path: " + str(e))
                 print(traceback.format_exc())
                 result = {{"success": False, "error": "Error processing POU path: " + str(e)}}
+        except Exception as e:
+            print("Error processing POU: " + str(e))
+            print(traceback.format_exc())
+            result = {{"success": False, "error": "Error processing POU: " + str(e)}}
 except Exception as e:
     error_type, error_value, error_traceback = sys.exc_info()
     print("Error in POU code setting script: " + str(error_value))
