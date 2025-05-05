@@ -1127,8 +1127,7 @@ try:
                 print("Starting build process...")
                 
                 # Clean build if requested
-                clean_build_flag = {0}  # This is a string "true" or "false", not a Python boolean
-                if clean_build_flag == "true" and hasattr(application, 'clean'):
+                if "{0}" == "true" and hasattr(application, 'clean'):
                     try:
                         print("Performing clean build")
                         application.clean()
@@ -1269,95 +1268,95 @@ try:
             
             # Try to find POU type and language enums
             if not 'result' in locals():  # Only proceed if we haven't set an error result
-                    try:
-                        # Look for PouType enum
-                        pou_type_value = None
-                        if hasattr(scriptengine, 'PouType'):
-                            print("Found PouType enum")
+                try:
+                    # Look for PouType enum
+                    pou_type_value = None
+                    if hasattr(scriptengine, 'PouType'):
+                        print("Found PouType enum")
+                        pou_type_map = {{
+                            "Program": scriptengine.PouType.PROGRAM, 
+                            "Function": scriptengine.PouType.FUNCTION,
+                            "FunctionBlock": scriptengine.PouType.FUNCTION_BLOCK
+                        }}
+                        if "{1}" in pou_type_map:
+                            pou_type_value = pou_type_map["{1}"]
+                            print("POU type mapped to: " + str(pou_type_value))
+                        else:
+                            print("Unknown POU type: {1}")
+                            result = {{"success": False, "error": "Unknown POU type: {1}"}}
+                    else:
+                        # Try to find enum values directly
+                        print("PouType enum not found, searching for values directly")
+                        if hasattr(scriptengine, 'PROGRAM'):
+                            print("Found direct enum values")
                             pou_type_map = {{
-                                "Program": scriptengine.PouType.PROGRAM, 
-                                "Function": scriptengine.PouType.FUNCTION,
-                                "FunctionBlock": scriptengine.PouType.FUNCTION_BLOCK
+                                "Program": scriptengine.PROGRAM,
+                                "Function": scriptengine.FUNCTION,
+                                "FunctionBlock": scriptengine.FUNCTION_BLOCK
                             }}
                             if "{1}" in pou_type_map:
                                 pou_type_value = pou_type_map["{1}"]
-                                print("POU type mapped to: " + str(pou_type_value))
+                                print("POU type mapped directly to: " + str(pou_type_value))
                             else:
                                 print("Unknown POU type: {1}")
                                 result = {{"success": False, "error": "Unknown POU type: {1}"}}
                         else:
-                            # Try to find enum values directly
-                            print("PouType enum not found, searching for values directly")
-                            if hasattr(scriptengine, 'PROGRAM'):
-                                print("Found direct enum values")
-                                pou_type_map = {{
-                                    "Program": scriptengine.PROGRAM,
-                                    "Function": scriptengine.FUNCTION,
-                                    "FunctionBlock": scriptengine.FUNCTION_BLOCK
-                                }}
-                                if "{1}" in pou_type_map:
-                                    pou_type_value = pou_type_map["{1}"]
-                                    print("POU type mapped directly to: " + str(pou_type_value))
-                                else:
-                                    print("Unknown POU type: {1}")
-                                    result = {{"success": False, "error": "Unknown POU type: {1}"}}
-                            else:
-                                print("Could not find POU type values")
-                                result = {{"success": False, "error": "Could not find POU type values"}}
-                        
-                        # Look for language enum
-                        language_value = None
-                        if not 'result' in locals() and pou_type_value is not None:
-                            if hasattr(scriptengine, 'ImplementationLanguage'):
-                                print("Found ImplementationLanguage enum")
-                                language_map = {{
-                                    "ST": scriptengine.ImplementationLanguage.ST,
-                                    "FBD": scriptengine.ImplementationLanguage.FBD,
-                                    "LD": scriptengine.ImplementationLanguage.LD,
-                                    "IL": scriptengine.ImplementationLanguage.IL,
-                                    "CFC": scriptengine.ImplementationLanguage.CFC,
-                                    "SFC": scriptengine.ImplementationLanguage.SFC
-                                }}
-                                if "{3}" in language_map:
-                                    language_value = language_map["{3}"]
-                                    print("Language mapped to: " + str(language_value))
-                                else:
-                                    print("Unknown language: {3}")
-                                    result = {{"success": False, "error": "Unknown language: {3}"}}
-                            else:
-                                # Try to find enum values directly
-                                print("ImplementationLanguage enum not found, searching for values directly")
-                                # Look for language-related enum values
-                                for attr in dir(scriptengine):
-                                    if attr.startswith('LANG_') or attr.startswith('ST') or attr.startswith('FBD'):
-                                        print("Found possible language enum in scriptengine." + attr)
-                                language_value = None  # Can't determine language value
-                                result = {{"success": False, "error": "Could not find language enum values"}}
-                    except Exception as e:
-                        print("Error resolving enums: " + str(e))
-                        result = {{"success": False, "error": "Error resolving enums: " + str(e)}}
-                
-                # Create POU if we have valid type and language values
-                if not 'result' in locals() and pou_type_value is not None and language_value is not None:
-                    try:
-                        print("Creating POU: {0}")
-                        pou = container.create_pou("{0}", pou_type_value, language_value)
-                        if pou is not None:
-                            print("POU created successfully")
-                            result = {{
-                                "success": True,
-                                "pou": {{
-                                    "name": "{0}",
-                                    "type": "{1}",
-                                    "language": "{3}"
-                                }}
+                            print("Could not find POU type values")
+                            result = {{"success": False, "error": "Could not find POU type values"}}
+                    
+                    # Look for language enum
+                    language_value = None
+                    if not 'result' in locals() and pou_type_value is not None:
+                        if hasattr(scriptengine, 'ImplementationLanguage'):
+                            print("Found ImplementationLanguage enum")
+                            language_map = {{
+                                "ST": scriptengine.ImplementationLanguage.ST,
+                                "FBD": scriptengine.ImplementationLanguage.FBD,
+                                "LD": scriptengine.ImplementationLanguage.LD,
+                                "IL": scriptengine.ImplementationLanguage.IL,
+                                "CFC": scriptengine.ImplementationLanguage.CFC,
+                                "SFC": scriptengine.ImplementationLanguage.SFC
                             }}
+                            if "{3}" in language_map:
+                                language_value = language_map["{3}"]
+                                print("Language mapped to: " + str(language_value))
+                            else:
+                                print("Unknown language: {3}")
+                                result = {{"success": False, "error": "Unknown language: {3}"}}
                         else:
-                            print("POU creation failed - returned None")
-                            result = {{"success": False, "error": "POU creation failed - returned None"}}
-                    except Exception as e:
-                        print("Error creating POU: " + str(e))
-                        result = {{"success": False, "error": "Error creating POU: " + str(e)}}
+                            # Try to find enum values directly
+                            print("ImplementationLanguage enum not found, searching for values directly")
+                            # Look for language-related enum values
+                            for attr in dir(scriptengine):
+                                if attr.startswith('LANG_') or attr.startswith('ST') or attr.startswith('FBD'):
+                                    print("Found possible language enum in scriptengine." + attr)
+                            language_value = None  # Can't determine language value
+                            result = {{"success": False, "error": "Could not find language enum values"}}
+                except Exception as e:
+                    print("Error resolving enums: " + str(e))
+                    result = {{"success": False, "error": "Error resolving enums: " + str(e)}}
+            
+            # Create POU if we have valid type and language values
+            if not 'result' in locals() and pou_type_value is not None and language_value is not None:
+                try:
+                    print("Creating POU: {0}")
+                    pou = container.create_pou("{0}", pou_type_value, language_value)
+                    if pou is not None:
+                        print("POU created successfully")
+                        result = {{
+                            "success": True,
+                            "pou": {{
+                                "name": "{0}",
+                                "type": "{1}",
+                                "language": "{3}"
+                            }}
+                        }}
+                    else:
+                        print("POU creation failed - returned None")
+                        result = {{"success": False, "error": "POU creation failed - returned None"}}
+                except Exception as e:
+                    print("Error creating POU: " + str(e))
+                    result = {{"success": False, "error": "Error creating POU: " + str(e)}}
 except Exception as e:
     error_type, error_value, error_traceback = sys.exc_info()
     print("Error in POU creation script: " + str(error_value))
