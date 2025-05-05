@@ -1353,6 +1353,13 @@ except Exception as e:
         # Escape code for string literal
         code = code.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
         
+        # Ensure path includes Application prefix if not present
+        if not pou_path.startswith("Application/") and not pou_path.startswith("application/"):
+            # Add Application/ prefix if not already there
+            full_pou_path = "Application/" + pou_path
+        else:
+            full_pou_path = pou_path
+            
         return """
 import scriptengine
 import json
@@ -1382,7 +1389,9 @@ try:
             
             # Parse the POU path
             try:
-                path_parts = "{0}".split('/')
+                full_path = "{1}"
+                print("Using full POU path: " + full_path)
+                path_parts = full_path.split('/')
                 pou_name = path_parts[-1] if path_parts else ""
                 parent_path = "/".join(path_parts[:-1])
                 
@@ -1407,14 +1416,18 @@ try:
                             current = current.get_object(part)
                             print("Found via get_object")
                         elif hasattr(current, 'objects'):
-                            # Try to find by iterating objects collection
-                            found = False
-                            for obj in current.objects:
-                                if hasattr(obj, 'name') and obj.name == part:
-                                    current = obj
-                                    found = True
-                                    print("Found via objects collection")
-                                    break
+                            try:
+                                # Try to find by iterating objects collection
+                                found = False
+                                for obj in current.objects:
+                                    if hasattr(obj, 'name') and obj.name == part:
+                                        current = obj
+                                        found = True
+                                        print("Found via objects collection")
+                                        break
+                            except Exception as e:
+                                print("Error iterating objects: " + str(e))
+                                found = False
                             if not found:
                                 raise ValueError("Object not found in collection: " + part)
                         else:
@@ -1447,49 +1460,66 @@ try:
                     print("POU not found: " + pou_name)
                     result = {{"success": False, "error": "POU not found: " + pou_name}}
                 else:
-                    # Set implementation code
+                    # Set implementation code using textual_implementation approach as shown in working example
                     print("Found POU, setting implementation code")
                     
-                    # Check if the POU has set_implementation_code method
-                    if hasattr(pou, 'set_implementation_code'):
-                        pou.set_implementation_code("{1}")
-                        print("Updated POU implementation code")
-                        
-                        # Return success
-                        result = {{
-                            "success": True,
-                            "message": "POU code updated",
-                            "pou": {{
-                                "name": pou.name if hasattr(pou, 'name') else pou_name,
-                                "path": "{0}"
+                    # Try to use the working approach from set_pou_code.py
+                    if hasattr(pou, 'textual_implementation'):
+                        impl_obj = pou.textual_implementation
+                        if impl_obj and hasattr(impl_obj, 'replace'):
+                            try:
+                                print("Setting implementation using textual_implementation.replace()")
+                                impl_obj.replace("{2}")
+                                print("Updated POU implementation code successfully")
+                                
+                                # Save the project to persist changes
+                                try:
+                                    print("Saving project after code change...")
+                                    project.save()
+                                    print("Project saved successfully")
+                                except Exception as save_err:
+                                    print("Warning: Failed to save project after code change: " + str(save_err))
+                                
+                                # Return success
+                                result = {{
+                                    "success": True,
+                                    "message": "POU code updated",
+                                    "pou": {{
+                                        "name": pou.name if hasattr(pou, 'name') else pou_name,
+                                        "path": "{0}"
+                                    }}
+                                }}
+                            except Exception as impl_err:
+                                print("Error setting implementation: " + str(impl_err))
+                                print(traceback.format_exc())
+                                result = {{
+                                    "success": False,
+                                    "error": "Error setting implementation: " + str(impl_err)
+                                }}
+                        else:
+                            print("textual_implementation exists but lacks replace method")
+                            result = {{
+                                "success": False,
+                                "error": "POU textual_implementation doesn't have replace method"
                             }}
-                        }}
                     else:
-                        # Try other methods for setting code
-                        if hasattr(pou, 'implementation') and hasattr(pou.implementation, 'st'):
-                            # Some POUs have .implementation.st property
-                            pou.implementation.st = "{1}"
-                            print("Updated POU implementation via .implementation.st")
-                            result = {{
-                                "success": True,
-                                "message": "POU code updated via implementation.st",
-                                "pou": {{
-                                    "name": pou.name if hasattr(pou, 'name') else pou_name,
-                                    "path": "{0}"
+                        # Fall back to other methods as a last resort
+                        print("POU doesn't have textual_implementation attribute, trying alternatives")
+                        if hasattr(pou, 'set_implementation_code'):
+                            try:
+                                pou.set_implementation_code("{2}")
+                                print("Updated POU implementation via set_implementation_code")
+                                result = {{
+                                    "success": True,
+                                    "message": "POU code updated",
+                                    "pou": {{
+                                        "name": pou.name if hasattr(pou, 'name') else pou_name,
+                                        "path": "{0}"
+                                    }}
                                 }}
-                            }}
-                        elif hasattr(pou, 'implementation') and hasattr(pou.implementation, 'set_code'):
-                            # Some POUs have .implementation.set_code() method
-                            pou.implementation.set_code("{1}")
-                            print("Updated POU implementation via .implementation.set_code()")
-                            result = {{
-                                "success": True,
-                                "message": "POU code updated via implementation.set_code",
-                                "pou": {{
-                                    "name": pou.name if hasattr(pou, 'name') else pou_name,
-                                    "path": "{0}"
-                                }}
-                            }}
+                            except Exception as e:
+                                print("Error using set_implementation_code: " + str(e))
+                                result = {{"success": False, "error": str(e)}}
                         else:
                             # No suitable method found
                             print("No method found to update POU code, object type: " + str(type(pou)))
@@ -1506,7 +1536,7 @@ except Exception as e:
     print("Error in POU code setting script: " + str(error_value))
     print(traceback.format_exc())
     result = {{"success": False, "error": str(error_value)}}
-""".format(pou_path, code)
+""".format(pou_path, full_pou_path, code)
 
     def generate_pou_list_script(self, params):
         """Generate script to list POUs in the project."""
