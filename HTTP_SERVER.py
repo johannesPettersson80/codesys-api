@@ -648,6 +648,12 @@ except Exception as e:
         # Normalize path to use backslashes for Windows
         path = path.replace("/", "\\")
         
+        # Get template_path parameter or use default CODESYS Standard template
+        template_path = params.get("template_path", "")
+        if not template_path:
+            # Look for Standard.project template in a common CODESYS location
+            template_path = r"C:\Program Files\CODESYS 3.5.21.0\CODESYS\Templates\Projects\Standard.project"
+            
         # Create a script compatible with IronPython 2.7 (no 'as' syntax for exceptions)
         # Use the global scriptengine.system instance instead of trying to create ScriptSystem()
         return """
@@ -657,6 +663,7 @@ import json
 import os
 import sys
 import warnings
+import traceback
 
 # Silence deprecation warnings for sys.exc_clear() in IronPython 2.7
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -679,13 +686,55 @@ try:
         print("Global system instance is None")
         raise Exception("Cannot access scriptengine.system instance")
     
-    print("Creating new project")
-    # Use the global projects instance
-    print("Using global scriptengine.projects instance")
-    # Create project directly with the path parameter
-    print("Creating project with path: {0}")
-    # Pass the path to the create method
-    project = scriptengine.projects.create("{0}")
+    # First check if standard template exists
+    template_path = "{1}"
+    if not os.path.exists(template_path):
+        print("Template not found at: " + template_path)
+        print("Looking for template in common locations...")
+        
+        # Try common CODESYS installation paths
+        potential_paths = [
+            r"C:\\Program Files\\CODESYS 3.5\\CODESYS\\Templates\\Projects\\Standard.project",
+            r"C:\\Program Files (x86)\\CODESYS 3.5\\CODESYS\\Templates\\Projects\\Standard.project",
+            r"C:\\Program Files\\CODESYS\\CODESYS\\Templates\\Projects\\Standard.project",
+            r"C:\\Program Files (x86)\\CODESYS\\CODESYS\\Templates\\Projects\\Standard.project"
+        ]
+        
+        # Find first available template
+        for path in potential_paths:
+            if os.path.exists(path):
+                template_path = path
+                print("Found template at: " + template_path)
+                break
+    
+    # Choose project creation method based on template availability
+    print("Creating new project at path: {0}")
+    project = None
+    
+    if os.path.exists(template_path):
+        print("Creating project from template: " + template_path)
+        # Use the copy_project method if template exists
+        try:
+            if hasattr(scriptengine.projects, 'copy_project'):
+                project = scriptengine.projects.copy_project(template_path, "{0}")
+                print("Project created from template using copy_project")
+            elif hasattr(scriptengine.projects, 'copy'):
+                project = scriptengine.projects.copy(template_path, "{0}")
+                print("Project created from template using copy")
+            else:
+                print("Cannot find copy method, trying create method instead")
+                project = scriptengine.projects.create("{0}")
+                print("Project created using create method")
+        except Exception as copy_error:
+            print("Error copying template: " + str(copy_error))
+            print("Falling back to create method")
+            project = scriptengine.projects.create("{0}")
+            print("Project created using create method (after template error)")
+    else:
+        print("No template found, creating empty project")
+        # Create empty project and set up structure
+        project = scriptengine.projects.create("{0}")
+        print("Empty project created, will need to set up Device and Application")
     
     print("Project created, no need to save separately")
     
@@ -693,7 +742,76 @@ try:
     # Store as active project
     session.active_project = project
     
-    print("Project created successfully")
+    # Explicitly check and set active_application
+    print("Checking for active application")
+    if hasattr(project, 'active_application') and project.active_application is not None:
+        app = project.active_application
+        print("Found active application: " + str(app))
+    else:
+        print("No active_application found, looking for applications")
+        
+        # Try different ways to get applications
+        if hasattr(project, 'applications'):
+            apps = []
+            
+            # Handle different application collection types
+            if hasattr(project.applications, 'items'):
+                apps = list(project.applications.items)
+                print("Found applications via items property: " + str(len(apps)))
+            elif hasattr(project.applications, '__iter__'):
+                apps = list(project.applications)
+                print("Found applications via iteration: " + str(len(apps)))
+                
+            if apps:
+                print("Found " + str(len(apps)) + " applications, setting first one as active")
+                project.active_application = apps[0]
+                print("Set active application: " + str(project.active_application))
+            else:
+                print("No applications found in project")
+                print("Trying to create the standard device and application structure")
+                
+                # Try to create a device and application if none exist
+                try:
+                    # Create a device (different methods may exist)
+                    device = None
+                    if hasattr(project, 'create_device'):
+                        device = project.create_device("Device")
+                        print("Created device using create_device method")
+                    elif hasattr(project, 'devices') and hasattr(project.devices, 'create'):
+                        device = project.devices.create("Device")
+                        print("Created device using devices.create method")
+                    else:
+                        print("No method found to create device")
+                    
+                    # Create an application in the device
+                    if device is not None:
+                        app = None
+                        if hasattr(device, 'create_application'):
+                            app = device.create_application("Application")
+                            print("Created application using create_application method")
+                        elif hasattr(device, 'applications') and hasattr(device.applications, 'create'):
+                            app = device.applications.create("Application")
+                            print("Created application using applications.create method")
+                        else:
+                            print("No method found to create application")
+                        
+                        # Set as active application
+                        if app is not None:
+                            project.active_application = app
+                            print("Set newly created application as active")
+                except Exception as create_error:
+                    print("Error creating device/application structure: " + str(create_error))
+                    print(traceback.format_exc())
+        else:
+            print("Cannot find applications property in project")
+    
+    # Double-check the active application
+    if hasattr(project, 'active_application') and project.active_application is not None:
+        print("Active application confirmed: " + str(project.active_application))
+    else:
+        print("WARNING: No active application set")
+    
+    print("Project creation completed")
     # Return success result
     result = {{
         "success": True,
@@ -707,12 +825,13 @@ except:
     # IronPython 2.7 style exception handling (no 'as e' syntax)
     error_type, error_value, error_traceback = sys.exc_info()
     print("Error creating project: " + str(error_value))
+    print(traceback.format_exc())
     
     result = {{
         "success": False,
         "error": str(error_value)
     }}
-""".format(path.replace("\\", "\\\\"))
+""".format(path.replace("\\", "\\\\"), template_path.replace("\\", "\\\\"))
         
     def generate_project_open_script(self, params):
         """Generate script to open a project."""
@@ -1501,7 +1620,9 @@ import traceback
 
 try:
     print("Starting POU listing script")
-    if parent_path := "{0}":
+    # Don't use walrus operator (:=) as it's not compatible with IronPython
+    parent_path = "{0}"
+    if parent_path:
         print("Looking for POUs in parent path: " + parent_path)
     else:
         print("Looking for POUs at application level")
@@ -2041,6 +2162,13 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
             default_path = os.path.join(script_dir, f"CODESYS_Project_{timestamp}.project")
             logger.info("No path provided, using default path: %s", default_path)
             params["path"] = default_path
+        
+        # Allow specifying a template path (optional)
+        template_path = params.get("template_path", "")
+        if template_path:
+            logger.info("Using template from: %s", template_path)
+        else:
+            logger.info("No template specified, will try to use standard template")
         
         path = params.get("path", "")
         # Normalize path to use backslashes for Windows
