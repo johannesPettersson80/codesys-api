@@ -483,20 +483,17 @@ class ScriptExecutor:
                 
                 time.sleep(poll_interval)
             
-            # If we've timed out, but CODESYS appears to be running,
-            # return a mock success result to allow the client to continue
-            if script_content.strip().startswith("import scriptengine") and "system = scriptengine.system" in script_content:
-                # This looks like a session initialization script
-                logger.warning("Script execution timed out, but CODESYS appears to be running. Returning mock success.")
-                
-                # Create a mock result file for future reference
-                try:
-                    with open(result_path, 'w', encoding='utf-8') as f:
-                        mock_result = {
-                            "success": True, 
-                            "message": "Session initialized (timeout workaround)",
-                            "mock_response": True
-                        }
+            # If we've timed out, don't create a fake success - report the timeout as an error
+            logger.error("Script execution timed out after %.2f seconds", time.time() - start_time)
+            
+            # Create an error result file for future reference
+            try:
+                with open(result_path, 'w', encoding='utf-8') as f:
+                    error_result = {
+                        "success": False, 
+                        "error": "Script execution timed out after {:.2f} seconds".format(time.time() - start_time),
+                        "timeout": True
+                    }
                         json.dump(mock_result, f)
                 except Exception as e:
                     logger.error("Error creating mock result file: %s", str(e))
@@ -1270,28 +1267,24 @@ try:
             if not 'result' in locals():  # Only proceed if we haven't set an error result
                 try:
                     # Map the string name to the actual PouType enum value
-                    # According to the scripting documentation, PouType is an enum with values:
-                    # Program=1, FunctionBlock=2, Function=3
                     print("Determining POU type for: {1}")
-                    pou_type_value = None
                     
-                    # Use direct enum integer values from documentation
-                    if "{1}" == "Program":
-                        pou_type_value = 1  # Program
-                        print("Set POU type to Program (1)")
-                    elif "{1}" == "FunctionBlock":
-                        pou_type_value = 2  # FunctionBlock
-                        print("Set POU type to FunctionBlock (2)")
-                    elif "{1}" == "Function":
-                        pou_type_value = 3  # Function
-                        print("Set POU type to Function (3)")
+                    # Define POU type map according to the working example code
+                    pou_type_map = {{
+                        "Program": scriptengine.PouType.Program,
+                        "FunctionBlock": scriptengine.PouType.FunctionBlock,
+                        "Function": scriptengine.PouType.Function
+                    }}
+                    
+                    # Get the POU type from the map
+                    if "{1}" in pou_type_map:
+                        pou_type_value = pou_type_map["{1}"]
+                        print("Set POU type to {1}")
                     else:
                         print("Unknown POU type: {1}")
                         result = {{"success": False, "error": "Unknown POU type: {1}"}}
-                    
-                    # Use the ST language by default (null/None for structured text)
-                    # According to documentation, language param is a Guid, default is structured text
-                    # We can pass None for the default structured text
+                        
+                    # Set language to None (let CODESYS default based on parent/settings)
                     language_value = None
                     print("Using default language: ST (None)")
                     
@@ -1306,18 +1299,27 @@ try:
                     result = {{"success": False, "error": "Error resolving type values: " + str(e)}}
             
             # Create POU with the correct parameters
-            if not 'result' in locals() and pou_type_value is not None:
+            if not 'result' in locals() and 'pou_type_value' in locals() and pou_type_value is not None:
                 try:
                     print("Creating POU: {0}")
                     
-                    # Call with the proper parameters based on POU type
+                    # Call with keyword arguments as shown in the example
                     if "{1}" == "Function":
                         # For functions, return_type is required
-                        pou = container.create_pou("{0}", pou_type_value, language_value, return_type)
+                        pou = container.create_pou(
+                            name="{0}",
+                            type=pou_type_value,
+                            language=language_value,
+                            return_type=return_type
+                        )
                         print("Created function with return type")
                     else:
                         # For programs and function blocks, return_type should not be specified
-                        pou = container.create_pou("{0}", pou_type_value, language_value)
+                        pou = container.create_pou(
+                            name="{0}",
+                            type=pou_type_value,
+                            language=language_value
+                        )
                         print("Created POU without return type")
                     
                     if pou is not None:
@@ -1977,13 +1979,15 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
                     
                 logger.info("CODESYS process started successfully")
             
-            # Return success immediately after starting CODESYS
-            # We won't wait for script execution since CODESYS is visibly running
-            self.send_json_response({
-                "success": True,
-                "message": "Session started (CODESYS visible)",
-                "bypass_script": True
-            })
+            # Generate the session start script
+            script = self.script_generator.generate_session_start_script()
+            
+            # Execute the script to properly initialize the session
+            logger.info("Executing session start script in CODESYS")
+            result = self.script_executor.execute_script(script)
+            
+            # Return the result from the script execution
+            self.send_json_response(result)
             
             # Remove all the commented out code that was causing indentation errors
                 
@@ -2020,12 +2024,15 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
             }, 500)
             return
             
-        # Skip script execution since CODESYS is already running
-        self.send_json_response({
-            "success": True,
-            "message": "Session restarted (CODESYS visible)",
-            "bypass_script": True
-        })
+        # Generate the session start script
+        script = self.script_generator.generate_session_start_script()
+        
+        # Execute the script to properly initialize the session
+        logger.info("Executing session start script in CODESYS after restart")
+        result = self.script_executor.execute_script(script)
+        
+        # Return the result from the script execution
+        self.send_json_response(result)
             
     def handle_session_status(self):
         """Handle session/status endpoint."""
@@ -2033,8 +2040,18 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
         process_running = self.process_manager.is_running()
         process_status = self.process_manager.get_status()
         
-        # Skip script execution and assume session is active if process is running
-        session_status = {"active": process_running, "session_active": process_running, "project_open": False}
+        # Execute the script to get actual session status
+        if process_running:
+            script = self.script_generator.generate_session_status_script()
+            logger.info("Executing session status script in CODESYS")
+            status_result = self.script_executor.execute_script(script)
+            
+            if status_result.get("success", False) and "status" in status_result:
+                session_status = status_result["status"]
+            else:
+                session_status = {"active": process_running, "session_active": process_running, "project_open": False}
+        else:
+            session_status = {"active": False, "session_active": False, "project_open": False}
                 
         # Combine status information
         status = {
@@ -2313,18 +2330,18 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
             }, 400)
             return
             
-        # Skip script execution and return success immediately
+        # Get script to execute
         script = params.get("script", "")
         first_line = script.split('\n')[0] if script else ""
         
-        logger.info("Script execute request: %s (bypassing script execution)", 
+        logger.info("Script execute request: %s", 
                     first_line[:50] + "..." if len(first_line) > 50 else first_line)
         
-        self.send_json_response({
-            "success": True,
-            "message": "Script executed (bypassed)",
-            "bypass_script": True
-        })
+        # Actually execute the script in CODESYS
+        result = self.script_executor.execute_script(script)
+        
+        # Return the result from execution
+        self.send_json_response(result)
         
     def handle_system_info(self):
         """Handle system/info endpoint."""
