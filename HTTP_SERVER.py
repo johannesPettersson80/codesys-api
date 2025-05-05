@@ -1266,81 +1266,60 @@ try:
                     print("Error navigating to parent path: " + str(e))
                     result = {{"success": False, "error": "Error navigating to parent path: " + str(e)}}
             
-            # Try to find POU type and language enums
+            # Use the properly defined POU types and implementation languages
             if not 'result' in locals():  # Only proceed if we haven't set an error result
                 try:
-                    # Look for PouType enum
+                    # Map the string name to the actual PouType enum value
+                    # According to the scripting documentation, PouType is an enum with values:
+                    # Program=1, FunctionBlock=2, Function=3
+                    print("Determining POU type for: {1}")
                     pou_type_value = None
-                    if hasattr(scriptengine, 'PouType'):
-                        print("Found PouType enum")
-                        pou_type_map = {{
-                            "Program": scriptengine.PouType.PROGRAM, 
-                            "Function": scriptengine.PouType.FUNCTION,
-                            "FunctionBlock": scriptengine.PouType.FUNCTION_BLOCK
-                        }}
-                        if "{1}" in pou_type_map:
-                            pou_type_value = pou_type_map["{1}"]
-                            print("POU type mapped to: " + str(pou_type_value))
-                        else:
-                            print("Unknown POU type: {1}")
-                            result = {{"success": False, "error": "Unknown POU type: {1}"}}
-                    else:
-                        # Try to find enum values directly
-                        print("PouType enum not found, searching for values directly")
-                        if hasattr(scriptengine, 'PROGRAM'):
-                            print("Found direct enum values")
-                            pou_type_map = {{
-                                "Program": scriptengine.PROGRAM,
-                                "Function": scriptengine.FUNCTION,
-                                "FunctionBlock": scriptengine.FUNCTION_BLOCK
-                            }}
-                            if "{1}" in pou_type_map:
-                                pou_type_value = pou_type_map["{1}"]
-                                print("POU type mapped directly to: " + str(pou_type_value))
-                            else:
-                                print("Unknown POU type: {1}")
-                                result = {{"success": False, "error": "Unknown POU type: {1}"}}
-                        else:
-                            print("Could not find POU type values")
-                            result = {{"success": False, "error": "Could not find POU type values"}}
                     
-                    # Look for language enum
+                    # Use direct enum integer values from documentation
+                    if "{1}" == "Program":
+                        pou_type_value = 1  # Program
+                        print("Set POU type to Program (1)")
+                    elif "{1}" == "FunctionBlock":
+                        pou_type_value = 2  # FunctionBlock
+                        print("Set POU type to FunctionBlock (2)")
+                    elif "{1}" == "Function":
+                        pou_type_value = 3  # Function
+                        print("Set POU type to Function (3)")
+                    else:
+                        print("Unknown POU type: {1}")
+                        result = {{"success": False, "error": "Unknown POU type: {1}"}}
+                    
+                    # Use the ST language by default (null/None for structured text)
+                    # According to documentation, language param is a Guid, default is structured text
+                    # We can pass None for the default structured text
                     language_value = None
-                    if not 'result' in locals() and pou_type_value is not None:
-                        if hasattr(scriptengine, 'ImplementationLanguage'):
-                            print("Found ImplementationLanguage enum")
-                            language_map = {{
-                                "ST": scriptengine.ImplementationLanguage.ST,
-                                "FBD": scriptengine.ImplementationLanguage.FBD,
-                                "LD": scriptengine.ImplementationLanguage.LD,
-                                "IL": scriptengine.ImplementationLanguage.IL,
-                                "CFC": scriptengine.ImplementationLanguage.CFC,
-                                "SFC": scriptengine.ImplementationLanguage.SFC
-                            }}
-                            if "{3}" in language_map:
-                                language_value = language_map["{3}"]
-                                print("Language mapped to: " + str(language_value))
-                            else:
-                                print("Unknown language: {3}")
-                                result = {{"success": False, "error": "Unknown language: {3}"}}
-                        else:
-                            # Try to find enum values directly
-                            print("ImplementationLanguage enum not found, searching for values directly")
-                            # Look for language-related enum values
-                            for attr in dir(scriptengine):
-                                if attr.startswith('LANG_') or attr.startswith('ST') or attr.startswith('FBD'):
-                                    print("Found possible language enum in scriptengine." + attr)
-                            language_value = None  # Can't determine language value
-                            result = {{"success": False, "error": "Could not find language enum values"}}
+                    print("Using default language: ST (None)")
+                    
+                    # Handle return type for functions
+                    return_type = None
+                    if "{1}" == "Function":
+                        # For functions, return type is required - use INT as default
+                        return_type = "INT" 
+                        print("Setting return type for function: INT")
                 except Exception as e:
-                    print("Error resolving enums: " + str(e))
-                    result = {{"success": False, "error": "Error resolving enums: " + str(e)}}
+                    print("Error resolving type values: " + str(e))
+                    result = {{"success": False, "error": "Error resolving type values: " + str(e)}}
             
-            # Create POU if we have valid type and language values
-            if not 'result' in locals() and pou_type_value is not None and language_value is not None:
+            # Create POU with the correct parameters
+            if not 'result' in locals() and pou_type_value is not None:
                 try:
                     print("Creating POU: {0}")
-                    pou = container.create_pou("{0}", pou_type_value, language_value)
+                    
+                    # Call with the proper parameters based on POU type
+                    if "{1}" == "Function":
+                        # For functions, return_type is required
+                        pou = container.create_pou("{0}", pou_type_value, language_value, return_type)
+                        print("Created function with return type")
+                    else:
+                        # For programs and function blocks, return_type should not be specified
+                        pou = container.create_pou("{0}", pou_type_value, language_value)
+                        print("Created POU without return type")
+                    
                     if pou is not None:
                         print("POU created successfully")
                         result = {{
