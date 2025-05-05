@@ -1127,7 +1127,7 @@ try:
                 print("Starting build process...")
                 
                 # Clean build if requested
-                if {0} and hasattr(application, 'clean'):
+                if {0} == "true" and hasattr(application, 'clean'):
                     try:
                         print("Performing clean build")
                         application.clean()
@@ -1198,7 +1198,7 @@ except Exception as e:
     print("Error in project compile script: " + str(error_value))
     print(traceback.format_exc())
     result = {{"success": False, "error": str(error_value)}}
-""".format(str(clean_build).lower())
+""".format("true" if clean_build else "false")
         
     def generate_pou_create_script(self, params):
         """Generate script to create a POU."""
@@ -1239,35 +1239,35 @@ try:
             # We'll try to use it directly
             container = application
             print("Using application object directly for POU creation")
-                
-                # Handle parent path navigation if needed
-                if "{2}":
-                    print("Navigating to parent path: {2}")
-                    try:
-                        # Navigate to parent container
-                        path_parts = "{2}".split('/')
-                        current = application
-                        for part in path_parts:
-                            if not part:
-                                continue
-                            if hasattr(current, 'find_object'):
-                                current = current.find_object(part)
-                            elif hasattr(current, 'get_object'):
-                                current = current.get_object(part)
-                            else:
-                                raise ValueError("Cannot navigate to " + part)
-                        
-                        if hasattr(current, 'pou_container'):
-                            container = current.pou_container
+            
+            # Handle parent path navigation if needed
+            if "{2}":
+                print("Navigating to parent path: {2}")
+                try:
+                    # Navigate to parent container
+                    path_parts = "{2}".split('/')
+                    current = application
+                    for part in path_parts:
+                        if not part:
+                            continue
+                        if hasattr(current, 'find_object'):
+                            current = current.find_object(part)
+                        elif hasattr(current, 'get_object'):
+                            current = current.get_object(part)
                         else:
-                            container = current
-                        print("Navigation to parent path successful")
-                    except Exception as e:
-                        print("Error navigating to parent path: " + str(e))
-                        result = {{"success": False, "error": "Error navigating to parent path: " + str(e)}}
-                
-                # Try to find POU type and language enums
-                if not 'result' in locals():  # Only proceed if we haven't set an error result
+                            raise ValueError("Cannot navigate to " + part)
+                    
+                    if hasattr(current, 'pou_container'):
+                        container = current.pou_container
+                    else:
+                        container = current
+                    print("Navigation to parent path successful")
+                except Exception as e:
+                    print("Error navigating to parent path: " + str(e))
+                    result = {{"success": False, "error": "Error navigating to parent path: " + str(e)}}
+            
+            # Try to find POU type and language enums
+            if not 'result' in locals():  # Only proceed if we haven't set an error result
                     try:
                         # Look for PouType enum
                         pou_type_value = None
