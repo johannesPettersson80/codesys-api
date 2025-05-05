@@ -494,19 +494,19 @@ class ScriptExecutor:
                         "error": "Script execution timed out after {:.2f} seconds".format(time.time() - start_time),
                         "timeout": True
                     }
-                        json.dump(mock_result, f)
-                except Exception as e:
-                    logger.error("Error creating mock result file: %s", str(e))
-                
-                # Clean up files
-                self._cleanup_files(script_path, None, request_path, request_dir)
-                
-                # Return mock success response
-                return {
-                    "success": True, 
-                    "message": "Session initialized (timeout workaround)",
-                    "mock_response": True
-                }
+                    json.dump(error_result, f)
+            except Exception as e:
+                logger.error("Error creating timeout result file: %s", str(e))
+            
+            # Clean up files
+            self._cleanup_files(script_path, None, request_path, request_dir)
+            
+            # Return error response
+            return {
+                "success": False, 
+                "error": "Script execution timed out after {:.2f} seconds".format(time.time() - start_time),
+                "timeout": True
+            }
             
             # Timeout
             elapsed = time.time() - start_time
