@@ -1127,7 +1127,8 @@ try:
                 print("Starting build process...")
                 
                 # Clean build if requested
-                if {0} == "true" and hasattr(application, 'clean'):
+                clean_build_flag = {0}  # This is a string "true" or "false", not a Python boolean
+                if clean_build_flag == "true" and hasattr(application, 'clean'):
                     try:
                         print("Performing clean build")
                         application.clean()

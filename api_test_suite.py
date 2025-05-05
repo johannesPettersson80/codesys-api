@@ -273,11 +273,13 @@ class CodesysApiTester:
             
             # Create a simple POU
             pou_name = f"TestPOU_{int(time.time())}"
-            self.create_pou(pou_name)
+            result = self.create_pou(pou_name)
             time.sleep(1)
             
-            # Set POU code (simple function block)
-            pou_code = f"""
+            # Only set code if creation was successful
+            if result.get("success", False):
+                # Set POU code (simple function block)
+                pou_code = f"""
 FUNCTION_BLOCK {pou_name}
 VAR_INPUT
     iValue : INT;
@@ -290,9 +292,11 @@ VAR
 END_VAR
 
 oResult := iValue * 2;  // Simple calculation
-            """
-            self.set_pou_code(pou_name, pou_code)
-            time.sleep(1)
+"""
+                self.set_pou_code(pou_name, pou_code)
+                time.sleep(1)
+            else:
+                logger.warning(f"Skipping code setting for {pou_name} as creation failed")
             
             # List POUs
             self.list_pous()
@@ -345,12 +349,15 @@ oResult := iValue * 2;  // Simple calculation
             ]
             
             for pou in pou_types:
-                self.create_pou(pou["name"], pou["type"], pou["language"])
+                # Create POU
+                result = self.create_pou(pou["name"], pou["type"], pou["language"])
                 time.sleep(1)
                 
-                # Set appropriate code based on POU type
-                if pou["type"] == "Program":
-                    code = f"""
+                # Only set code if creation was successful
+                if result.get("success", False):
+                    # Set appropriate code based on POU type
+                    if pou["type"] == "Program":
+                        code = f"""
 PROGRAM {pou["name"]}
 VAR
     TestVar : INT := 0;
@@ -358,9 +365,9 @@ END_VAR
 
 // Test program code
 TestVar := TestVar + 1;
-                    """
-                elif pou["type"] == "FunctionBlock":
-                    code = f"""
+"""
+                    elif pou["type"] == "FunctionBlock":
+                        code = f"""
 FUNCTION_BLOCK {pou["name"]}
 VAR_INPUT
     iValue : INT;
@@ -371,9 +378,9 @@ END_VAR
 
 // Test function block code
 oResult := iValue * 2;
-                    """
-                elif pou["type"] == "Function":
-                    code = f"""
+"""
+                    elif pou["type"] == "Function":
+                        code = f"""
 FUNCTION {pou["name"]} : INT
 VAR_INPUT
     iValue : INT;
@@ -381,10 +388,12 @@ END_VAR
 
 // Test function code
 {pou["name"]} := iValue * 3;
-                    """
-                
-                self.set_pou_code(pou["name"], code)
-                time.sleep(1)
+"""
+                    
+                    self.set_pou_code(pou["name"], code)
+                    time.sleep(1)
+                else:
+                    logger.warning(f"Skipping code setting for {pou['name']} as creation failed")
             
             # List POUs
             self.list_pous()
