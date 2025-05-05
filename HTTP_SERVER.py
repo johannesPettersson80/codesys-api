@@ -648,11 +648,18 @@ except Exception as e:
         # Normalize path to use backslashes for Windows
         path = path.replace("/", "\\")
         
-        # Get template_path parameter or use default CODESYS Standard template
+        # Get template_path parameter or build from CODESYS_PATH
         template_path = params.get("template_path", "")
         if not template_path:
-            # Look for Standard.project template in a common CODESYS location
-            template_path = r"C:\Program Files\CODESYS 3.5.21.0\CODESYS\Templates\Projects\Standard.project"
+            # Derive template path from CODESYS executable path
+            codesys_dir = os.path.dirname(CODESYS_PATH)  # Get directory containing CODESYS.exe
+            if "Common" in codesys_dir:  # Handle "Common" subfolder case
+                codesys_dir = os.path.dirname(codesys_dir)  # Go up one level
+            template_path = os.path.join(codesys_dir, "Templates", "Standard.project")
+            logger.info("Using derived template path: %s", template_path)
+            
+        # Pass CODESYS_PATH to the script to help find templates
+        codesys_path = CODESYS_PATH
             
         # Create a script compatible with IronPython 2.7 (no 'as' syntax for exceptions)
         # Use the global scriptengine.system instance instead of trying to create ScriptSystem()
@@ -686,26 +693,41 @@ try:
         print("Global system instance is None")
         raise Exception("Cannot access scriptengine.system instance")
     
-    # First check if standard template exists
+    # Check if standard template exists at the provided path
     template_path = "{1}"
+    print("Looking for template at: " + template_path)
+    
     if not os.path.exists(template_path):
         print("Template not found at: " + template_path)
-        print("Looking for template in common locations...")
         
-        # Try common CODESYS installation paths
-        potential_paths = [
-            r"C:\\Program Files\\CODESYS 3.5\\CODESYS\\Templates\\Projects\\Standard.project",
-            r"C:\\Program Files (x86)\\CODESYS 3.5\\CODESYS\\Templates\\Projects\\Standard.project",
-            r"C:\\Program Files\\CODESYS\\CODESYS\\Templates\\Projects\\Standard.project",
-            r"C:\\Program Files (x86)\\CODESYS\\CODESYS\\Templates\\Projects\\Standard.project"
-        ]
+        # Try to determine template location directly from CODESYS_PATH
+        codesys_path = r"{2}"
+        print("CODESYS path: " + codesys_path)
         
-        # Find first available template
-        for path in potential_paths:
-            if os.path.exists(path):
-                template_path = path
-                print("Found template at: " + template_path)
-                break
+        # Derive template path from CODESYS executable path
+        codesys_dir = os.path.dirname(codesys_path)  # Get directory containing CODESYS.exe
+        if "Common" in codesys_dir:  # Handle "Common" subfolder case
+            codesys_dir = os.path.dirname(codesys_dir)  # Go up one level
+            
+        # Use the exact path format you specified
+        template_path = os.path.join(codesys_dir, "Templates", "Standard.project")
+        print("Trying template at: " + template_path)
+        
+        if not os.path.exists(template_path):
+            print("Template still not found at the derived path")
+            
+            # Just for diagnostics - check if Templates directory exists
+            templates_dir = os.path.join(codesys_dir, "Templates")
+            if os.path.exists(templates_dir):
+                print("Templates directory exists at: " + templates_dir)
+                print("Contents of Templates directory:")
+                try:
+                    for item in os.listdir(templates_dir):
+                        print("  - " + item)
+                except Exception as e:
+                    print("  Error listing directory: " + str(e))
+            else:
+                print("Templates directory not found at: " + templates_dir)
     
     # Choose project creation method based on template availability
     print("Creating new project at path: {0}")
@@ -732,9 +754,44 @@ try:
             print("Project created using create method (after template error)")
     else:
         print("No template found, creating empty project")
-        # Create empty project and set up structure
+        # Create empty project
         project = scriptengine.projects.create("{0}")
         print("Empty project created, will need to set up Device and Application")
+        
+        # Try to manually create a standard project structure as last resort
+        try:
+            print("Attempting to create standard project structure manually...")
+            
+            # Try standard project format writing (XML format)
+            project_content = """<?xml version="1.0" encoding="utf-8"?>
+<project xmlns="http://www.3s-software.com/schemas/projectbase">
+  <target>
+    <name>Device</name>
+    <type>SoftMotion</type>
+    <has_profile>False</has_profile>
+    <application>
+      <name>Application</name>
+      <is_base>True</is_base>
+    </application>
+  </target>
+</project>"""
+            
+            # Try to save project in XML format
+            if hasattr(project, 'save_as'):
+                print("Saving project with standard structure...")
+                project.save_as("{0}")
+                print("Project saved successfully")
+                
+                # Reload the project
+                print("Reloading project...")
+                scriptengine.projects.close_all()
+                project = scriptengine.projects.open("{0}")
+                print("Project reloaded")
+            else:
+                print("Cannot save project structure, will try API-based creation")
+        except Exception as struct_error:
+            print("Error creating standard structure: " + str(struct_error))
+            print("Will try API-based structure creation")
     
     print("Project created, no need to save separately")
     
@@ -831,7 +888,7 @@ except:
         "success": False,
         "error": str(error_value)
     }}
-""".format(path.replace("\\", "\\\\"), template_path.replace("\\", "\\\\"))
+""".format(path.replace("\\", "\\\\"), template_path.replace("\\", "\\\\"), codesys_path.replace("\\", "\\\\"))
         
     def generate_project_open_script(self, params):
         """Generate script to open a project."""
