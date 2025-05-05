@@ -661,10 +661,9 @@ except Exception as e:
         # Pass CODESYS_PATH to the script to help find templates
         codesys_path = CODESYS_PATH
             
-        # Create a script compatible with IronPython 2.7 (no 'as' syntax for exceptions)
-        # Use the global scriptengine.system instance instead of trying to create ScriptSystem()
+        # Create a super simple script - just open the template and save as the new name
         return """
-# Basic script to create a project - IronPython 2.7 compatible
+# Simple script to create a project from template - IronPython 2.7 compatible
 import scriptengine
 import json
 import os
@@ -676,22 +675,7 @@ import traceback
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 try:
-    # Simple project creation script
     print("Starting project creation script")
-    print("Python version: " + sys.version)
-    
-    # Use the global system instance provided by scriptengine
-    # IMPORTANT: scriptengine.system is a pre-existing instance
-    # NOT scriptengine.ScriptSystem() or session.system
-    print("Using global scriptengine.system instance")
-    system = scriptengine.system
-    
-    # Store system in session for future reference
-    session.system = system
-    
-    if system is None:
-        print("Global system instance is None")
-        raise Exception("Cannot access scriptengine.system instance")
     
     # Check if standard template exists at the provided path
     template_path = "{1}"
@@ -709,166 +693,55 @@ try:
         if "Common" in codesys_dir:  # Handle "Common" subfolder case
             codesys_dir = os.path.dirname(codesys_dir)  # Go up one level
             
-        # Use the exact path format you specified
         template_path = os.path.join(codesys_dir, "Templates", "Standard.project")
         print("Trying template at: " + template_path)
+    
+    if not os.path.exists(template_path):
+        print("Template not found! Cannot create project from template.")
+        raise Exception("Template not found at: " + template_path)
+    
+    # Simple approach: open template, save as new name
+    print("Opening template: " + template_path)
+    project = scriptengine.projects.open(template_path)
+    if project is None:
+        print("Failed to open template project")
+        raise Exception("Failed to open template project at: " + template_path)
+    
+    print("Template opened successfully")
+    
+    # Save as new project name
+    print("Saving as new project: {0}")
+    if hasattr(project, 'save_as'):
+        project.save_as("{0}")
+        print("Project saved successfully as: {0}")
         
-        if not os.path.exists(template_path):
-            print("Template still not found at the derived path")
-            
-            # Just for diagnostics - check if Templates directory exists
-            templates_dir = os.path.join(codesys_dir, "Templates")
-            if os.path.exists(templates_dir):
-                print("Templates directory exists at: " + templates_dir)
-                print("Contents of Templates directory:")
-                try:
-                    for item in os.listdir(templates_dir):
-                        print("  - " + item)
-                except Exception as e:
-                    print("  Error listing directory: " + str(e))
-            else:
-                print("Templates directory not found at: " + templates_dir)
-    
-    # Choose project creation method based on template availability
-    print("Creating new project at path: {0}")
-    project = None
-    
-    if os.path.exists(template_path):
-        print("Creating project from template: " + template_path)
-        # Use the copy_project method if template exists
-        try:
-            if hasattr(scriptengine.projects, 'copy_project'):
-                project = scriptengine.projects.copy_project(template_path, "{0}")
-                print("Project created from template using copy_project")
-            elif hasattr(scriptengine.projects, 'copy'):
-                project = scriptengine.projects.copy(template_path, "{0}")
-                print("Project created from template using copy")
-            else:
-                print("Cannot find copy method, trying create method instead")
-                project = scriptengine.projects.create("{0}")
-                print("Project created using create method")
-        except Exception as copy_error:
-            print("Error copying template: " + str(copy_error))
-            print("Falling back to create method")
-            project = scriptengine.projects.create("{0}")
-            print("Project created using create method (after template error)")
+        # Close template and open the new project
+        print("Closing template and opening new project")
+        scriptengine.projects.close_all()
+        project = scriptengine.projects.open("{0}")
+        if project is None:
+            print("Failed to open new project")
+            raise Exception("Failed to open newly created project at: {0}")
+        
+        print("New project opened successfully")
     else:
-        print("No template found, creating empty project")
-        # Create empty project
-        project = scriptengine.projects.create("{0}")
-        print("Empty project created, will need to set up Device and Application")
-        
-        # Try to manually create a standard project structure as last resort
-        try:
-            print("Attempting to create standard project structure manually...")
-            
-            # Try standard project format writing (XML format)
-            project_content = '''<?xml version="1.0" encoding="utf-8"?>
-<project xmlns="http://www.3s-software.com/schemas/projectbase">
-  <target>
-    <name>Device</name>
-    <type>SoftMotion</type>
-    <has_profile>False</has_profile>
-    <application>
-      <name>Application</name>
-      <is_base>True</is_base>
-    </application>
-  </target>
-</project>'''
-            
-            # Try to save project in XML format
-            if hasattr(project, 'save_as'):
-                print("Saving project with standard structure...")
-                project.save_as("{0}")
-                print("Project saved successfully")
-                
-                # Reload the project
-                print("Reloading project...")
-                scriptengine.projects.close_all()
-                project = scriptengine.projects.open("{0}")
-                print("Project reloaded")
-            else:
-                print("Cannot save project structure, will try API-based creation")
-        except Exception as struct_error:
-            print("Error creating standard structure: " + str(struct_error))
-            print("Will try API-based structure creation")
+        print("Project has no save_as method")
+        raise Exception("Project object does not have a save_as method")
     
-    print("Project created, no need to save separately")
-    
+    # Set as active project
     print("Setting as active project")
-    # Store as active project
     session.active_project = project
     
-    # Explicitly check and set active_application
+    # Check active application
     print("Checking for active application")
     if hasattr(project, 'active_application') and project.active_application is not None:
         app = project.active_application
         print("Found active application: " + str(app))
     else:
-        print("No active_application found, looking for applications")
-        
-        # Try different ways to get applications
-        if hasattr(project, 'applications'):
-            apps = []
-            
-            # Handle different application collection types
-            if hasattr(project.applications, 'items'):
-                apps = list(project.applications.items)
-                print("Found applications via items property: " + str(len(apps)))
-            elif hasattr(project.applications, '__iter__'):
-                apps = list(project.applications)
-                print("Found applications via iteration: " + str(len(apps)))
-                
-            if apps:
-                print("Found " + str(len(apps)) + " applications, setting first one as active")
-                project.active_application = apps[0]
-                print("Set active application: " + str(project.active_application))
-            else:
-                print("No applications found in project")
-                print("Trying to create the standard device and application structure")
-                
-                # Try to create a device and application if none exist
-                try:
-                    # Create a device (different methods may exist)
-                    device = None
-                    if hasattr(project, 'create_device'):
-                        device = project.create_device("Device")
-                        print("Created device using create_device method")
-                    elif hasattr(project, 'devices') and hasattr(project.devices, 'create'):
-                        device = project.devices.create("Device")
-                        print("Created device using devices.create method")
-                    else:
-                        print("No method found to create device")
-                    
-                    # Create an application in the device
-                    if device is not None:
-                        app = None
-                        if hasattr(device, 'create_application'):
-                            app = device.create_application("Application")
-                            print("Created application using create_application method")
-                        elif hasattr(device, 'applications') and hasattr(device.applications, 'create'):
-                            app = device.applications.create("Application")
-                            print("Created application using applications.create method")
-                        else:
-                            print("No method found to create application")
-                        
-                        # Set as active application
-                        if app is not None:
-                            project.active_application = app
-                            print("Set newly created application as active")
-                except Exception as create_error:
-                    print("Error creating device/application structure: " + str(create_error))
-                    print(traceback.format_exc())
-        else:
-            print("Cannot find applications property in project")
-    
-    # Double-check the active application
-    if hasattr(project, 'active_application') and project.active_application is not None:
-        print("Active application confirmed: " + str(project.active_application))
-    else:
-        print("WARNING: No active application set")
+        print("No active application found in project")
     
     print("Project creation completed")
+    
     # Return success result
     result = {{
         "success": True,
