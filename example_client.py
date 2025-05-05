@@ -287,7 +287,9 @@ def example_workflow():
         logger.error("Failed to compile project: %s", result.get('error', 'Unknown error'))
         return False
         
-    # Step 8: Save project
+    # Step 8: Save project (only needed if changes were made)
+    # Note: This would not be needed right after create_project() since the save_as operation
+    # already saves the project to disk, but it is needed here after POU creation
     logger.info("Saving project...")
     result = save_project()
     if not result.get('success', False):

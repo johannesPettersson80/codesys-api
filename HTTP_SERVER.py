@@ -734,6 +734,8 @@ try:
     print("Project creation completed")
     
     # Return success result
+    # Note: Project is already saved to disk at this point (save_as operation handles this)
+    # There's no need to call save_project() immediately after create_project()
     result = {{
         "success": True,
         "project": {{

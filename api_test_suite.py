@@ -267,8 +267,8 @@ class CodesysApiTester:
             
             # Project tests
             self.create_project()
-            time.sleep(2)
-            self.save_project()
+            # Note: No need to call save_project() after create_project() 
+            # since the save_as operation already saves the project to disk
             self.list_projects()
             
             # Create a simple POU
@@ -334,8 +334,8 @@ oResult := iValue * 2;  // Simple calculation
             
             # Project tests
             self.create_project()
-            time.sleep(2)
-            self.save_project()
+            # Note: No need to call save_project() after create_project() 
+            # since the save_as operation already saves the project to disk
             
             # Create multiple POUs with different types
             pou_types = [
