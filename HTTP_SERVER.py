@@ -714,16 +714,7 @@ try:
     if hasattr(project, 'save_as'):
         project.save_as("{0}")
         print("Project saved successfully as: {0}")
-        
-        # Close template and open the new project
-        print("Closing template and opening new project")
-        scriptengine.projects.close_all()
-        project = scriptengine.projects.open("{0}")
-        if project is None:
-            print("Failed to open new project")
-            raise Exception("Failed to open newly created project at: {0}")
-        
-        print("New project opened successfully")
+        # That's it! The project is now saved with our desired name and is already the active project
     else:
         print("Project has no save_as method")
         raise Exception("Project object does not have a save_as method")
