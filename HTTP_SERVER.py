@@ -1233,14 +1233,10 @@ try:
             application = project.active_application
             print("Got active application")
             
-            # Try to get POU container
-            if not hasattr(application, 'pou_container') or application.pou_container is None:
-                print("Application has no POU container")
-                result = {{"success": False, "error": "Application has no POU container"}}
-            else:
-                # Get container
-                container = application.pou_container
-                print("Got POU container")
+            # The application itself should implement IecLanguageObjectContainer
+            # We'll try to use it directly
+            container = application
+            print("Using application object directly for POU creation")
                 
                 # Handle parent path navigation if needed
                 if "{2}":
