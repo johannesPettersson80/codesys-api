@@ -763,7 +763,7 @@ try:
             print("Attempting to create standard project structure manually...")
             
             # Try standard project format writing (XML format)
-            project_content = """<?xml version="1.0" encoding="utf-8"?>
+            project_content = '''<?xml version="1.0" encoding="utf-8"?>
 <project xmlns="http://www.3s-software.com/schemas/projectbase">
   <target>
     <name>Device</name>
@@ -774,7 +774,7 @@ try:
       <is_base>True</is_base>
     </application>
   </target>
-</project>"""
+</project>'''
             
             # Try to save project in XML format
             if hasattr(project, 'save_as'):
