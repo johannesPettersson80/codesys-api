@@ -128,9 +128,29 @@ def create_pou(name, pou_type, language, parent_path=""):
         
     return call_api('POST', 'pou/create', data)
 
-def set_pou_code(path, code):
-    """Set the code of a POU."""
-    return call_api('POST', 'pou/code', {'path': path, 'code': code})
+def set_pou_code(path, code=None, declaration=None, implementation=None):
+    """Set the code of a POU.
+    
+    Args:
+        path: Path to the POU
+        code: Legacy parameter for backward compatibility (full code)
+        declaration: Variable declarations (VAR blocks)
+        implementation: Implementation code (logic)
+    """
+    data = {'path': path}
+    
+    # Support both new and legacy calling conventions
+    if code is not None:
+        # Legacy mode - put all code in implementation
+        data['implementation'] = code
+    else:
+        # New mode - separate declaration and implementation
+        if declaration is not None:
+            data['declaration'] = declaration
+        if implementation is not None:
+            data['implementation'] = implementation
+            
+    return call_api('POST', 'pou/code', data)
 
 def list_pous(parent_path=""):
     """List POUs in the current project."""
@@ -244,29 +264,29 @@ def example_workflow():
         logger.error("Failed to create POU: %s", result.get('error', 'Unknown error'))
         return False
         
-    # Step 5: Set POU code
-    st_code = """
-    VAR_INPUT
-        Enable : BOOL;
-        Speed : INT;
-    END_VAR
-    
-    VAR_OUTPUT
-        Running : BOOL;
-        ActualSpeed : INT;
-    END_VAR
-    
-    IF Enable THEN
-        Running := TRUE;
-        ActualSpeed := Speed;
-    ELSE
-        Running := FALSE;
-        ActualSpeed := 0;
-    END_IF
-    """
+    # Step 5: Set POU code (properly separated into declaration and implementation)
+    st_declaration = """VAR_INPUT
+    Enable : BOOL;
+    Speed : INT;
+END_VAR
+
+VAR_OUTPUT
+    Running : BOOL;
+    ActualSpeed : INT;
+END_VAR"""
+
+    st_implementation = """IF Enable THEN
+    Running := TRUE;
+    ActualSpeed := Speed;
+ELSE
+    Running := FALSE;
+    ActualSpeed := 0;
+END_IF"""
     
     logger.info("Setting POU code...")
-    result = set_pou_code("Application/MotorController", st_code)
+    result = set_pou_code("Application/MotorController", 
+                         declaration=st_declaration, 
+                         implementation=st_implementation)
     if not result.get('success', False):
         logger.error("Failed to set POU code: %s", result.get('error', 'Unknown error'))
         return False

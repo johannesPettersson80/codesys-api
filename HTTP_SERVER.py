@@ -1364,12 +1364,26 @@ except Exception as e:
 """.format(name, pou_type, parent_path, language)
         
     def generate_pou_code_script(self, params):
-        """Generate script to set POU code."""
+        """Generate script to set POU code (declaration and/or implementation)."""
         pou_path = params.get("path", "")
-        code = params.get("code", "")
         
-        # Escape code for string literal
-        code = code.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+        # Get code components
+        legacy_code = params.get("code", "")
+        declaration = params.get("declaration", "")
+        implementation = params.get("implementation", "")
+        
+        # Support legacy mode where all code goes to implementation
+        if legacy_code and not implementation:
+            implementation = legacy_code
+        
+        # Escape code for string literals
+        def escape_code(code_str):
+            if not code_str:
+                return ""
+            return code_str.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+        
+        escaped_declaration = escape_code(declaration)
+        escaped_implementation = escape_code(implementation)
         
         # Ensure path includes Application prefix if not present
         if not pou_path.startswith("Application/") and not pou_path.startswith("application/"):
@@ -1586,78 +1600,97 @@ try:
                         result = {{"success": False, "error": "POU not found after retry: " + full_path}}
                     else:
                         print("Found POU on retry after delay")
-            else:
+            
+            if pou:
                 # POU was found
                 pou_name = pou.get_name() if hasattr(pou, 'get_name') else full_path.split('/')[-1]
                 print("Found POU: " + pou_name)
                 
-                # Set implementation code using textual_implementation approach as shown in working example
-                print("Found POU, setting implementation code")
+                # Track what we set
+                operations_performed = []
                 
-                # Try to use the working approach from set_pou_code.py
-                if hasattr(pou, 'textual_implementation'):
-                    impl_obj = pou.textual_implementation
-                    if impl_obj and hasattr(impl_obj, 'replace'):
-                        try:
-                            print("Setting implementation using textual_implementation.replace()")
-                            impl_obj.replace("{2}")
-                            print("Updated POU implementation code successfully")
-                            
-                            # Save the project to persist changes
+                # Set declaration if provided
+                declaration_code = "{2}"
+                if declaration_code:
+                    print("Setting POU declaration code")
+                    if hasattr(pou, 'textual_declaration'):
+                        decl_obj = pou.textual_declaration
+                        if decl_obj and hasattr(decl_obj, 'replace'):
                             try:
-                                print("Saving project after code change...")
-                                project.save()
-                                print("Project saved successfully")
-                            except Exception as save_err:
-                                print("Warning: Failed to save project after code change: " + str(save_err))
-                            
-                            # Return success
-                            result = {{
-                                "success": True,
-                                "message": "POU code updated",
-                                "pou": {{
-                                    "name": pou_name,
-                                    "path": "{0}"
+                                print("Setting declaration using textual_declaration.replace()")
+                                decl_obj.replace(declaration_code)
+                                print("Updated POU declaration code successfully")
+                                operations_performed.append("declaration")
+                            except Exception as decl_err:
+                                print("Error setting declaration: " + str(decl_err))
+                                result = {{
+                                    "success": False,
+                                    "error": "Error setting declaration: " + str(decl_err)
                                 }}
-                            }}
-                        except Exception as impl_err:
-                            print("Error setting implementation: " + str(impl_err))
-                            print(traceback.format_exc())
+                        else:
+                            print("textual_declaration exists but lacks replace method")
                             result = {{
                                 "success": False,
-                                "error": "Error setting implementation: " + str(impl_err)
+                                "error": "POU textual_declaration doesn't have replace method"
                             }}
                     else:
-                        print("textual_implementation exists but lacks replace method")
+                        print("POU doesn't have textual_declaration attribute")
                         result = {{
                             "success": False,
-                            "error": "POU textual_implementation doesn't have replace method"
+                            "error": "POU doesn't have textual_declaration attribute"
                         }}
-                else:
-                    # Fall back to other methods as a last resort
-                    print("POU doesn't have textual_implementation attribute, trying alternatives")
-                    if hasattr(pou, 'set_implementation_code'):
-                        try:
-                            pou.set_implementation_code("{2}")
-                            print("Updated POU implementation via set_implementation_code")
-                            result = {{
-                                "success": True,
-                                "message": "POU code updated",
-                                "pou": {{
-                                    "name": pou_name,
-                                    "path": "{0}"
+                
+                # Set implementation if provided (and no error from declaration)
+                implementation_code = "{3}"
+                if implementation_code and 'result' not in locals():
+                    print("Setting POU implementation code")
+                    if hasattr(pou, 'textual_implementation'):
+                        impl_obj = pou.textual_implementation
+                        if impl_obj and hasattr(impl_obj, 'replace'):
+                            try:
+                                print("Setting implementation using textual_implementation.replace()")
+                                impl_obj.replace(implementation_code)
+                                print("Updated POU implementation code successfully")
+                                operations_performed.append("implementation")
+                            except Exception as impl_err:
+                                print("Error setting implementation: " + str(impl_err))
+                                print(traceback.format_exc())
+                                result = {{
+                                    "success": False,
+                                    "error": "Error setting implementation: " + str(impl_err)
                                 }}
+                        else:
+                            print("textual_implementation exists but lacks replace method")
+                            result = {{
+                                "success": False,
+                                "error": "POU textual_implementation doesn't have replace method"
                             }}
-                        except Exception as e:
-                            print("Error using set_implementation_code: " + str(e))
-                            result = {{"success": False, "error": str(e)}}
                     else:
-                        # No suitable method found
-                        print("No method found to update POU code, object type: " + str(type(pou)))
+                        print("POU doesn't have textual_implementation attribute")
                         result = {{
                             "success": False,
-                            "error": "POU found but no method to update its code was found"
+                            "error": "POU doesn't have textual_implementation attribute"
                         }}
+                
+                # If we got here without errors, save and return success
+                if 'result' not in locals():
+                    try:
+                        print("Saving project after code changes...")
+                        project.save()
+                        print("Project saved successfully")
+                    except Exception as save_err:
+                        print("Warning: Failed to save project after code changes: " + str(save_err))
+                    
+                    # Return success
+                    result = {{
+                        "success": True,
+                        "message": "POU code updated (" + " + ".join(operations_performed) + ")",
+                        "pou": {{
+                            "name": pou_name,
+                            "path": "{0}",
+                            "operations": operations_performed
+                        }}
+                    }}
         except Exception as e:
             print("Error processing POU path: " + str(e))
             print(traceback.format_exc())
@@ -1667,7 +1700,7 @@ except Exception as e:
     print("Error in POU code setting script: " + str(error_value))
     print(traceback.format_exc())
     result = {{"success": False, "error": str(error_value)}}
-""".format(pou_path, full_pou_path, code)
+""".format(pou_path, full_pou_path, escaped_declaration, escaped_implementation)
 
     def generate_pou_list_script(self, params):
         """Generate script to list POUs in the project."""
@@ -2463,19 +2496,36 @@ class CodesysApiHandler(BaseHTTPRequestHandler):
         
     def handle_pou_code(self, params):
         """Handle pou/code endpoint."""
-        required = ["path", "code"]
-        for field in required:
-            if field not in params:
-                self.send_json_response({
-                    "success": False,
-                    "error": "Missing required parameter: " + field
-                }, 400)
-                return
+        # Check that we have path and at least one of: code, declaration, or implementation
+        if "path" not in params:
+            self.send_json_response({
+                "success": False,
+                "error": "Missing required parameter: path"
+            }, 400)
+            return
+            
+        # Check that we have some code to set
+        has_code = any(key in params for key in ["code", "declaration", "implementation"])
+        if not has_code:
+            self.send_json_response({
+                "success": False,
+                "error": "Missing code parameter: need at least one of 'code', 'declaration', or 'implementation'"
+            }, 400)
+            return
                 
         path = params.get("path", "")
-        code = params.get("code", "")
         
-        logger.info("POU code update request for '%s' (executing script in CODESYS)", path)
+        # Support both legacy and new calling conventions
+        if "code" in params:
+            logger.info("POU code update request (legacy mode) for '%s' (executing script in CODESYS)", path)
+        else:
+            parts = []
+            if "declaration" in params:
+                parts.append("declaration")
+            if "implementation" in params:
+                parts.append("implementation")
+            logger.info("POU code update request (%s) for '%s' (executing script in CODESYS)", 
+                       " + ".join(parts), path)
         
         # Generate and execute POU code setting script
         script = self.script_generator.generate_pou_code_script(params)
