@@ -1136,6 +1136,12 @@ try:
                 try:
                     # Compile application
                     print("Building application...")
+                    
+                    # Add a small delay to ensure UI thread operations complete
+                    import time
+                    time.sleep(0.5)
+                    
+                    # Attempt to build with proper thread handling
                     build_result = application.build()
                     print("Build operation completed")
                     
@@ -1330,6 +1336,11 @@ try:
                             session.created_pous = {{}}
                         session.created_pous["{0}"] = pou
                         print("Stored POU reference in session.created_pous['{0}']")
+                        
+                        # Add a small delay to allow CODESYS to update internal structures
+                        import time
+                        time.sleep(0.5)
+                        print("Allowed time for CODESYS to update after POU creation")
                         
                         result = {{
                             "success": True,
@@ -1563,7 +1574,18 @@ try:
                     pou = session.created_pous[pou_name]
                 else:
                     print("POU not found in session.created_pous either")
-                    result = {{"success": False, "error": "POU not found: " + full_path}}
+                    
+                    # One more attempt - try a slight delay and re-search
+                    import time
+                    print("Waiting 1 second for CODESYS to update internal structures...")
+                    time.sleep(1.0)
+                    
+                    # Try the robust finder again
+                    pou = find_object_by_path_robust(project, full_path, "POU")
+                    if not pou:
+                        result = {{"success": False, "error": "POU not found after retry: " + full_path}}
+                    else:
+                        print("Found POU on retry after delay")
             else:
                 # POU was found
                 pou_name = pou.get_name() if hasattr(pou, 'get_name') else full_path.split('/')[-1]
@@ -1868,6 +1890,39 @@ try:
                             print("Error iterating container objects: " + str(iter_error))
                     else:
                         print("No method found to list POUs in this container")
+                    
+                    # Check session.created_pous for recently created POUs that might not be visible yet
+                    if hasattr(session, 'created_pous') and session.created_pous:
+                        print("Checking session.created_pous for recently created POUs")
+                        for pou_name, pou_obj in session.created_pous.items():
+                            # Check if this POU is already in our list
+                            already_listed = False
+                            for existing_pou in pous:
+                                if existing_pou.get("name") == pou_name:
+                                    already_listed = True
+                                    break
+                            
+                            if not already_listed:
+                                try:
+                                    pou_type = "Unknown"
+                                    if hasattr(pou_obj, 'type'):
+                                        pou_type = str(pou_obj.type).split('.')[-1]
+                                    
+                                    language = "Unknown"
+                                    if hasattr(pou_obj, 'implementation_language'):
+                                        language = str(pou_obj.implementation_language).split('.')[-1]
+                                    elif hasattr(pou_obj, 'implementation') and hasattr(pou_obj.implementation, 'language'):
+                                        language = str(pou_obj.implementation.language).split('.')[-1]
+                                    
+                                    pous.append({{
+                                        "name": pou_name,
+                                        "type": pou_type,
+                                        "language": language,
+                                        "source": "session_cache"
+                                    }})
+                                    print("Added POU from session cache: " + pou_name)
+                                except Exception as session_pou_error:
+                                    print("Error processing session POU " + pou_name + ": " + str(session_pou_error))
                         
                     # Return POUs list, even if empty
                     print("Found " + str(len(pous)) + " POUs")

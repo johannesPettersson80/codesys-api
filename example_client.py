@@ -306,18 +306,18 @@ def example_workflow():
     # Step 10: Execute custom script
     logger.info("Executing custom script...")
     custom_script = """
-    import scriptengine
+import scriptengine
+
+try:
+    # Get system version
+    system = scriptengine.ScriptSystem()
+    version = system.version if hasattr(system, 'version') else "Unknown"
     
-    try:
-        # Get system version
-        system = scriptengine.ScriptSystem()
-        version = system.version if hasattr(system, 'version') else "Unknown"
-        
-        # Return result
-        result = {"success": True, "version": version}
-    except Exception as e:
-        result = {"success": False, "error": str(e)}
-    """
+    # Return result
+    result = {"success": True, "version": version}
+except Exception as e:
+    result = {"success": False, "error": str(e)}
+"""
     
     result = execute_script(custom_script)
     if not result.get('success', False):
