@@ -1385,12 +1385,8 @@ except Exception as e:
         escaped_declaration = escape_code(declaration)
         escaped_implementation = escape_code(implementation)
         
-        # Ensure path includes Application prefix if not present
-        if not pou_path.startswith("Application/") and not pou_path.startswith("application/"):
-            # Add Application/ prefix if not already there
-            full_pou_path = "Application/" + pou_path
-        else:
-            full_pou_path = pou_path
+        # Extract POU name from path (last component)
+        pou_name = pou_path.split('/')[-1] if '/' in pou_path else pou_path
             
         return """
 import scriptengine
@@ -1398,164 +1394,6 @@ import json
 import sys
 import traceback
 
-# Robust object finding function based on working implementation 
-def find_object_by_path_robust(start_node, full_path, target_type_name="object"):
-    print("Finding " + target_type_name + " by path: '" + full_path + "'")
-    normalized_path = full_path.replace('\\\\\\\\', '/').strip('/')
-    path_parts = normalized_path.split('/')
-    if not path_parts:
-        print("ERROR: Path is empty.")
-        return None
-
-    # Determine the actual starting node (project or application)
-    project = start_node  # Assume start_node is project initially
-    if not hasattr(start_node, 'active_application') and hasattr(start_node, 'project'):
-         # If start_node is not project but has project ref (e.g., an application), get the project
-         try: 
-             project = start_node.project
-         except Exception as proj_ref_err:
-             print("WARN: Could not get project reference from start_node: " + str(proj_ref_err))
-             # Proceed assuming start_node might be the project anyway or search fails
-
-    # Try to get the application object robustly if we think we have the project
-    app = None
-    if hasattr(project, 'active_application'):
-        try: 
-            app = project.active_application
-        except Exception: 
-            pass  # Ignore errors getting active app
-        
-        if not app:
-            try:
-                 # Try to find the application by traversing objects
-                 if hasattr(project, 'objects'):
-                     for obj in project.objects:
-                         if hasattr(obj, 'get_name') and obj.get_name() == "Application":
-                             app = obj
-                             break
-            except Exception: 
-                pass
-
-    # Check if the first path part matches the application name
-    app_name_lower = ""
-    if app:
-        try: 
-            app_name_lower = (app.get_name() or "application").lower()
-        except Exception: 
-            app_name_lower = "application"  # Fallback
-
-    # Decide where to start the traversal
-    current_obj = start_node  # Default to the node passed in
-    if hasattr(project, 'active_application'):  # Only adjust if start_node was likely the project
-        if app and path_parts[0].lower() == app_name_lower:
-             print("Path starts with Application name '" + path_parts[0] + "'. Beginning search there.")
-             current_obj = app
-             path_parts = path_parts[1:]  # Consume the app name part
-             # If path was *only* the application name
-             if not path_parts:
-                 print("Target path is the Application object itself.")
-                 return current_obj
-        else:
-            print("Path does not start with Application name. Starting search from project root.")
-            current_obj = project  # Start search from the project root
-    else:
-         print("Starting search from originally provided node.")
-
-    # Traverse the remaining path parts
-    parent_path_str = current_obj.get_name() if hasattr(current_obj, 'get_name') else str(current_obj)
-
-    for i, part_name in enumerate(path_parts):
-        is_last_part = (i == len(path_parts) - 1)
-        print("Searching for part [" + str(i+1) + "/" + str(len(path_parts)) + "]: '" + part_name + "' under '" + parent_path_str + "'")
-        found_in_parent = None
-        
-        try:
-            # Try various methods to find the child object by name
-            if hasattr(current_obj, 'find_object'):
-                try:
-                    found_in_parent = current_obj.find_object(part_name)
-                    if found_in_parent:
-                        print("Found via find_object")
-                except Exception as e:
-                    print("Error with find_object: " + str(e))
-            
-            if not found_in_parent and hasattr(current_obj, 'get_object'):
-                try:
-                    found_in_parent = current_obj.get_object(part_name)
-                    if found_in_parent:
-                        print("Found via get_object")
-                except Exception as e:
-                    print("Error with get_object: " + str(e))
-            
-            if not found_in_parent and hasattr(current_obj, 'objects'):
-                try:
-                    for obj in current_obj.objects:
-                        if hasattr(obj, 'name') and obj.name == part_name:
-                            found_in_parent = obj
-                            print("Found via objects collection")
-                            break
-                        if hasattr(obj, 'get_name') and obj.get_name() == part_name:
-                            found_in_parent = obj
-                            print("Found via get_name method")
-                            break
-                except Exception as e:
-                    print("Error iterating objects: " + str(e))
-            
-            # Check POUs collection for POUs specifically
-            if not found_in_parent and (is_last_part or len(path_parts) == 1):
-                print("Checking POUs collection for: " + part_name)
-                
-                # Try to find POU in pou_container.pous first
-                if hasattr(current_obj, 'pou_container'):
-                    try:
-                        pou_container = current_obj.pou_container
-                        if hasattr(pou_container, 'pous'):
-                            print("Searching in pou_container.pous")
-                            for pou in pou_container.pous:
-                                if hasattr(pou, 'name') and pou.name == part_name:
-                                    found_in_parent = pou
-                                    print("Found POU via pou_container.pous")
-                                    break
-                                if hasattr(pou, 'get_name') and pou.get_name() == part_name:
-                                    found_in_parent = pou
-                                    print("Found POU via pou_container.pous get_name")
-                                    break
-                    except Exception as e:
-                        print("Error searching pou_container.pous: " + str(e))
-                
-                # Try direct pous collection if not found yet
-                if not found_in_parent and hasattr(current_obj, 'pous'):
-                    try:
-                        print("Searching in direct pous collection")
-                        for pou in current_obj.pous:
-                            if hasattr(pou, 'name') and pou.name == part_name:
-                                found_in_parent = pou
-                                print("Found POU via direct pous collection")
-                                break
-                            if hasattr(pou, 'get_name') and pou.get_name() == part_name:
-                                found_in_parent = pou
-                                print("Found POU via direct pous collection get_name")
-                                break
-                    except Exception as e:
-                        print("Error searching direct pous collection: " + str(e))
-            
-            # Update current object if found
-            if found_in_parent:
-                current_obj = found_in_parent
-                parent_path_str = current_obj.get_name() if hasattr(current_obj, 'get_name') else part_name
-                print("Stepped into '" + parent_path_str + "'")
-            else:
-                # If not found at any point, the path is invalid from this parent
-                print("ERROR: Path part '" + part_name + "' not found under '" + parent_path_str + "'")
-                return None  # Path broken
-
-        except Exception as find_err:
-            print("ERROR: Exception while searching for '" + part_name + "' under '" + parent_path_str + "': " + str(find_err))
-            print(traceback.format_exc())
-            return None  # Error during search
-
-    print("Found object: " + (current_obj.get_name() if hasattr(current_obj, 'get_name') else "Unnamed"))
-    return current_obj
 
 
 try:
@@ -1570,41 +1408,42 @@ try:
         project = session.active_project
         print("Got active project")
         
-        # Use robust object finding method
+        # Use CODESYS API find() method to locate POU
         try:
-            full_path = "{1}"
-            print("Using full POU path: " + full_path)
+            pou_name = "{1}"
+            print("Searching for POU by name: " + pou_name)
             
-            # Find the POU using the robust path finder
-            pou = find_object_by_path_robust(project, full_path, "POU")
+            # Try to find POU in session.created_pous first (fastest lookup)
+            pou = None
+            if hasattr(session, 'created_pous') and pou_name in session.created_pous:
+                print("Found POU in session.created_pous: " + pou_name)
+                pou = session.created_pous[pou_name]
+            else:
+                # Use CODESYS API find() method to search for POU by name
+                print("Searching project tree for POU: " + pou_name)
+                found_objects = project.find(pou_name, recursive=True)
+                if found_objects:
+                    pou = found_objects[0]  # Use first match
+                    print("Found POU using project.find(): " + pou_name)
+                else:
+                    print("POU not found using project.find()")
+                    
+                    # Try searching in active application if available
+                    if hasattr(project, 'active_application') and project.active_application:
+                        app = project.active_application
+                        print("Searching in active application for: " + pou_name)
+                        app_objects = app.find(pou_name, recursive=True)
+                        if app_objects:
+                            pou = app_objects[0]
+                            print("Found POU in active application: " + pou_name)
             
             if not pou:
-                print("POU not found using robust path finder: " + full_path)
-                
-                # Try to find POU in session.created_pous as fallback
-                pou_name = full_path.split('/')[-1]  # Get the POU name from the path
-                if hasattr(session, 'created_pous') and pou_name in session.created_pous:
-                    print("Found POU in session.created_pous: " + pou_name)
-                    pou = session.created_pous[pou_name]
-                else:
-                    print("POU not found in session.created_pous either")
-                    
-                    # One more attempt - try a slight delay and re-search
-                    import time
-                    print("Waiting 1 second for CODESYS to update internal structures...")
-                    time.sleep(1.0)
-                    
-                    # Try the robust finder again
-                    pou = find_object_by_path_robust(project, full_path, "POU")
-                    if not pou:
-                        result = {{"success": False, "error": "POU not found after retry: " + full_path}}
-                    else:
-                        print("Found POU on retry after delay")
+                result = {{"success": False, "error": "POU not found: " + pou_name}}
             
             if pou:
                 # POU was found
-                pou_name = pou.get_name() if hasattr(pou, 'get_name') else full_path.split('/')[-1]
-                print("Found POU: " + pou_name)
+                actual_pou_name = pou.get_name() if hasattr(pou, 'get_name') else pou_name
+                print("Found POU: " + actual_pou_name)
                 
                 # Track what we set
                 operations_performed = []
@@ -1686,7 +1525,7 @@ try:
                         "success": True,
                         "message": "POU code updated (" + " + ".join(operations_performed) + ")",
                         "pou": {{
-                            "name": pou_name,
+                            "name": actual_pou_name,
                             "path": "{0}",
                             "operations": operations_performed
                         }}
@@ -1700,7 +1539,7 @@ except Exception as e:
     print("Error in POU code setting script: " + str(error_value))
     print(traceback.format_exc())
     result = {{"success": False, "error": str(error_value)}}
-""".format(pou_path, full_pou_path, escaped_declaration, escaped_implementation)
+""".format(pou_path, pou_name, escaped_declaration, escaped_implementation)
 
     def generate_pou_list_script(self, params):
         """Generate script to list POUs in the project."""
