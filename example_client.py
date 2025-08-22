@@ -93,7 +93,7 @@ def restart_session():
 
 def create_project(path):
     """Create a new CODESYS project."""
-    return call_api('POST', 'project/create', {'path': path}, timeout=30)  # Use a shorter timeout for testing
+    return call_api('POST', 'project/create', {'path': path})
 
 def open_project(path):
     """Open an existing CODESYS project."""

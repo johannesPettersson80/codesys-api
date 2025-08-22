@@ -1516,7 +1516,7 @@ try:
                 pou_name = pou.get_name() if hasattr(pou, 'get_name') else full_path.split('/')[-1]
                 print("Found POU: " + pou_name)
                 
-                    # Set implementation code using textual_implementation approach as shown in working example
+                # Set implementation code using textual_implementation approach as shown in working example
                 print("Found POU, setting implementation code")
                 
                 # Try to use the working approach from set_pou_code.py
@@ -1583,14 +1583,10 @@ try:
                             "success": False,
                             "error": "POU found but no method to update its code was found"
                         }}
-            except Exception as e:
-                print("Error processing POU path: " + str(e))
-                print(traceback.format_exc())
-                result = {{"success": False, "error": "Error processing POU path: " + str(e)}}
         except Exception as e:
-            print("Error processing POU: " + str(e))
+            print("Error processing POU path: " + str(e))
             print(traceback.format_exc())
-            result = {{"success": False, "error": "Error processing POU: " + str(e)}}
+            result = {{"success": False, "error": "Error processing POU path: " + str(e)}}
 except Exception as e:
     error_type, error_value, error_traceback = sys.exc_info()
     print("Error in POU code setting script: " + str(error_value))
