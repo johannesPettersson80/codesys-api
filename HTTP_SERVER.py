@@ -1324,6 +1324,13 @@ try:
                     
                     if pou is not None:
                         print("POU created successfully")
+                        
+                        # Store POU reference in session for easier later access
+                        if not hasattr(session, 'created_pous'):
+                            session.created_pous = {{}}
+                        session.created_pous["{0}"] = pou
+                        print("Stored POU reference in session.created_pous['{0}']")
+                        
                         result = {{
                             "success": True,
                             "pou": {{
@@ -1469,6 +1476,44 @@ def find_object_by_path_robust(start_node, full_path, target_type_name="object")
                 except Exception as e:
                     print("Error iterating objects: " + str(e))
             
+            # Check POUs collection for POUs specifically
+            if not found_in_parent and (is_last_part or len(path_parts) == 1):
+                print("Checking POUs collection for: " + part_name)
+                
+                # Try to find POU in pou_container.pous first
+                if hasattr(current_obj, 'pou_container'):
+                    try:
+                        pou_container = current_obj.pou_container
+                        if hasattr(pou_container, 'pous'):
+                            print("Searching in pou_container.pous")
+                            for pou in pou_container.pous:
+                                if hasattr(pou, 'name') and pou.name == part_name:
+                                    found_in_parent = pou
+                                    print("Found POU via pou_container.pous")
+                                    break
+                                if hasattr(pou, 'get_name') and pou.get_name() == part_name:
+                                    found_in_parent = pou
+                                    print("Found POU via pou_container.pous get_name")
+                                    break
+                    except Exception as e:
+                        print("Error searching pou_container.pous: " + str(e))
+                
+                # Try direct pous collection if not found yet
+                if not found_in_parent and hasattr(current_obj, 'pous'):
+                    try:
+                        print("Searching in direct pous collection")
+                        for pou in current_obj.pous:
+                            if hasattr(pou, 'name') and pou.name == part_name:
+                                found_in_parent = pou
+                                print("Found POU via direct pous collection")
+                                break
+                            if hasattr(pou, 'get_name') and pou.get_name() == part_name:
+                                found_in_parent = pou
+                                print("Found POU via direct pous collection get_name")
+                                break
+                    except Exception as e:
+                        print("Error searching direct pous collection: " + str(e))
+            
             # Update current object if found
             if found_in_parent:
                 current_obj = found_in_parent
@@ -1510,7 +1555,15 @@ try:
             
             if not pou:
                 print("POU not found using robust path finder: " + full_path)
-                result = {{"success": False, "error": "POU not found: " + full_path}}
+                
+                # Try to find POU in session.created_pous as fallback
+                pou_name = full_path.split('/')[-1]  # Get the POU name from the path
+                if hasattr(session, 'created_pous') and pou_name in session.created_pous:
+                    print("Found POU in session.created_pous: " + pou_name)
+                    pou = session.created_pous[pou_name]
+                else:
+                    print("POU not found in session.created_pous either")
+                    result = {{"success": False, "error": "POU not found: " + full_path}}
             else:
                 # POU was found
                 pou_name = pou.get_name() if hasattr(pou, 'get_name') else full_path.split('/')[-1]
