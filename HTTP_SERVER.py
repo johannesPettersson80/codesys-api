@@ -1096,13 +1096,14 @@ try:
     print("Starting project compile script")
     print("Clean build requested: {0}")
     
-    # Get the primary project from CODESYS (required for build() to work)
-    project = scriptengine.projects.primary
-    if project is None:
-        print("No primary project in CODESYS")
-        result = {{"success": False, "error": "No primary project in CODESYS. Please open a project first."}}
+    # Check if we have an active project
+    if not hasattr(session, 'active_project') or session.active_project is None:
+        print("No active project in session")
+        result = {{"success": False, "error": "No active project in session"}}
     else:
-        print("Got primary project: " + str(project))
+        # Get active project
+        project = session.active_project
+        print("Got active project")
         
         # Try to get application
         if not hasattr(project, 'active_application') or project.active_application is None:
@@ -1122,21 +1123,48 @@ try:
                 start_time = time.time()
                 print("Starting build process...")
                 
-                # Clean build if requested
-                if "{0}" == "true" and hasattr(application, 'clean'):
+                # Initialize build variables
+                build_result = None
+                clean_success = True
+                
+                # Define a function to run clean operation on the primary thread
+                def clean_on_primary_thread():
+                    global clean_result
                     try:
-                        print("Performing clean build")
+                        print("Performing clean build on primary thread")
                         application.clean()
-                        print("Clean operation completed")
+                        clean_result = {{"success": True}}
+                        print("Clean operation completed on primary thread")
                     except Exception as clean_error:
                         print("Error during clean operation: " + str(clean_error))
-                        print("Will attempt to continue with build anyway")
+                        clean_result = {{"success": False, "error": str(clean_error)}}
+                
+                # Clean build if requested
+                if "{0}" == "true" and hasattr(application, 'clean'):
+                    print("Executing clean operation on primary thread")
+                    clean_result = None
+                    scriptengine.system.execute_on_primary_thread(clean_on_primary_thread, async=False)
+                    if clean_result and not clean_result.get("success", False):
+                        print("Clean operation failed, will attempt to continue anyway")
+                        clean_success = False
+                
+                # Define a function to run build operation on the primary thread
+                def build_on_primary_thread():
+                    global build_result
+                    try:
+                        print("Building application on primary thread...")
+                        build_result = application.build()
+                        print("Build operation completed on primary thread")
+                    except Exception as build_error:
+                        print("Error during build operation on primary thread: " + str(build_error))
+                        build_result = None
+                        raise build_error
                 
                 try:
-                    # Compile application
-                    print("Building application...")
-                    build_result = application.build()
-                    print("Build operation completed")
+                    # Execute build on primary thread to avoid UI threading issues
+                    print("Executing build operation on primary thread")
+                    scriptengine.system.execute_on_primary_thread(build_on_primary_thread, async=False)
+                    print("Build thread execution completed")
                     
                     # Calculate compilation time
                     compilation_time = time.time() - start_time
