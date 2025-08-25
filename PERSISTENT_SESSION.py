@@ -23,12 +23,6 @@ import traceback
 import threading
 import warnings
 
-# Python 2.7 compatible queue import
-try:
-    import Queue
-except ImportError:
-    import queue as Queue
-
 # Silence deprecation warnings for sys.exc_clear() in IronPython 2.7
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -58,7 +52,6 @@ class CodesysPersistentSession(object):
         self.running = True
         self.request_thread = None
         self.init_success = False
-        self.request_queue = Queue.Queue()
         
     def initialize(self):
         """Initialize the CODESYS environment."""
@@ -216,9 +209,6 @@ class CodesysPersistentSession(object):
                     except:
                         pass
                     break
-                
-                # Process queued requests in main thread (needed for UI operations like build())
-                self.process_queued_requests()
                     
                 # Perform periodic tasks
                 self.periodic_tasks()
@@ -236,33 +226,8 @@ class CodesysPersistentSession(object):
             # Cleanup
             self.cleanup()
             
-    def process_queued_requests(self):
-        """Process queued requests in the main thread."""
-        try:
-            # Process all available requests without blocking
-            while True:
-                try:
-                    request_path = self.request_queue.get_nowait()
-                    self.log("Processing queued request in main thread: %s" % request_path)
-                    self.process_request(request_path)
-                    self.request_queue.task_done()
-                except Queue.Empty:
-                    # No more requests to process
-                    break
-                except Exception, e:
-                    self.log("Error processing queued request: %s" % str(e))
-                    self.log(traceback.format_exc())
-                    # Mark task as done even if it failed
-                    try:
-                        self.request_queue.task_done()
-                    except:
-                        pass
-        except Exception, e:
-            self.log("Error in process_queued_requests: %s" % str(e))
-            self.log(traceback.format_exc())
-            
     def process_requests(self):
-        """Monitor for request files and queue them for main thread execution."""
+        """Process script execution requests."""
         while self.running:
             try:
                 # Look for request files
@@ -270,17 +235,16 @@ class CodesysPersistentSession(object):
                     if filename.endswith(".request"):
                         request_path = os.path.join(REQUEST_DIR, filename)
                         
-                        # Queue request for main thread execution
-                        self.request_queue.put(request_path)
-                        self.log("Queued request: %s" % request_path)
+                        # Process request
+                        self.process_request(request_path)
                         
-                        # Remove request file from directory
+                        # Remove request file
                         try:
                             os.remove(request_path)
                         except:
                             pass
             except Exception, e:
-                self.log("Error monitoring requests: %s" % str(e))
+                self.log("Error processing requests: %s" % str(e))
                 self.log(traceback.format_exc())
                 
             # Sleep briefly
